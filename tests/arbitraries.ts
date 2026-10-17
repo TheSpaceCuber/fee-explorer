@@ -4,7 +4,9 @@ import { COMPOUNDINGS, type FeePeriod, type FundEvent, type FundInput, type Mana
 /**
  * Random but valid fund for property tests:
  *  - 1–4 LPs, optionally a GP commitment,
- *  - 1–12 events with sorted dates between 2020 and 2032; distributions may carry a cost sold,
+ *  - 1–12 events with sorted dates between 2020 and 2032, each in one of 4 deals; a distribution
+ *    sells some fraction of its deal's remaining cost (sometimes all of it, sometimes for 0),
+ *  - European or American (with or without loss recovery),
  *  - any compounding, catch-up of 0 / 50% / 80% / 100% (carry is capped at 40% so all are valid),
  *  - optional NAV,
  *  - optional management fees: a commitment-basis period, then an invested-capital period, with an
@@ -47,6 +49,8 @@ const feesArb: fc.Arbitrary<ManagementFeeTerms | undefined> = fc.option(
 
 export const fundArb: fc.Arbitrary<FundInput> = fc
   .record({
+    structure: fc.constantFrom('european' as const, 'american' as const),
+    lossRecovery: fc.constantFrom('realized' as const, 'none' as const),
     hurdleRate: rate(2000),
     carryRate: rate(4000),
     catchUpRate: fc.constantFrom(0, 0.5, 0.8, 1),
@@ -59,27 +63,37 @@ export const fundArb: fc.Arbitrary<FundInput> = fc
         dayOffset: fc.integer({ min: 0, max: 12 * 365 }),
         amount: cents(1000),
         costFraction: rate(10_000),
+        deal: fc.integer({ min: 0, max: 3 }),
+        writeOff: fc.integer({ min: 0, max: 9 }), // 1 in 10 distributions is a write-off
       }),
       { minLength: 1, maxLength: 12 },
     ),
     nav: fc.option(cents(1000), { nil: undefined }),
     fees: feesArb,
   })
-  .map(({ hurdleRate, carryRate, catchUpRate, compounding, commitments, gpCommit, rawEvents, nav, fees }) => {
+  .map(({ structure, lossRecovery, hurdleRate, carryRate, catchUpRate, compounding, commitments, gpCommit, rawEvents, nav, fees }) => {
     const sorted = [...rawEvents].sort((a, b) => a.dayOffset - b.dayOffset);
     // Valid funds start with a capital call (validation rejects anything else).
     sorted[0]!.isCall = true;
-    let invested = 0;
+    // Track each deal's remaining cost, so cost sold never exceeds what was invested in that deal.
+    const dealCost = new Map<string, number>();
     const events: FundEvent[] = sorted.map((e, i) => {
       const date = toDate(e.dayOffset);
       if (e.isCall) {
-        invested += e.amount;
-        return { id: `e${i}`, kind: 'capital_call', date, investment: e.amount, fee: 0 };
+        const dealId = `D${e.deal}`;
+        dealCost.set(dealId, (dealCost.get(dealId) ?? 0) + e.amount);
+        return { id: `e${i}`, kind: 'capital_call', date, investment: e.amount, fee: 0, dealId };
       }
-      // Cost sold: some fraction of what's still invested, so invested capital never goes negative.
-      const costRealized = Math.round(invested * e.costFraction * 100) / 100;
-      invested -= costRealized;
-      return { id: `e${i}`, kind: 'distribution', date, amount: e.amount, costRealized };
+      // Distributions come from a deal that has been invested in (the first call guarantees one).
+      const live = [...dealCost.keys()];
+      const dealId = live[e.deal % live.length]!;
+      const remaining = Math.max(0, dealCost.get(dealId)!);
+      const writeOff = e.writeOff === 0;
+      // Round DOWN to cents and never past what's left: rounding up could sell more cost than the
+      // deal has, and the next exit would then try to sell a negative amount.
+      const costRealized = writeOff ? remaining : Math.min(remaining, Math.floor(remaining * e.costFraction * 100) / 100);
+      dealCost.set(dealId, Math.max(0, remaining - costRealized));
+      return { id: `e${i}`, kind: 'distribution', date, amount: writeOff ? 0 : e.amount, costRealized, dealId };
     });
 
     const partners: Partner[] = commitments.map((c, i) => ({
@@ -91,7 +105,7 @@ export const fundArb: fc.Arbitrary<FundInput> = fc
     if (gpCommit !== undefined) partners.push({ id: 'GP', role: 'GP', commitment: gpCommit });
 
     return {
-      terms: { structure: 'european', hurdleRate, compounding, catchUpRate, carryRate },
+      terms: { structure, lossRecovery, hurdleRate, compounding, catchUpRate, carryRate },
       partners,
       events,
       ...(nav === undefined ? {} : { nav: { date: toDate(sorted.at(-1)!.dayOffset + 30), amount: nav } }),

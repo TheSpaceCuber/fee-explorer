@@ -1,4 +1,4 @@
-import type { CarryTerms, EventTrace, FundEvent, PartnerLedger, TierAllocation } from '../types';
+import type { AccrualNote, CarryTerms, EventTrace, FundEvent, PartnerLedger, TierAllocation } from '../types';
 import { accrue } from './hurdle';
 import { carrySplit, catchUp, preferredReturn, returnOfCapital, type TierOutcome } from './tiers';
 
@@ -8,6 +8,9 @@ import { carrySplit, catchUp, preferredReturn, returnOfCapital, type TierOutcome
  * "European" means the GP earns no carry until the LP has got back ALL contributed capital plus
  * the hurdle on it, across the whole fund. Individual deals don't matter, only total cash in and
  * cash out. That's why one ledger per partner is enough.
+ *
+ * `distribute` (running the tiers on one distribution) is shared with the American waterfall,
+ * which only differs in what is "due" when the cash arrives.
  */
 
 export const emptyLedger = (): PartnerLedger => ({
@@ -35,6 +38,57 @@ const TIER_STEPS: ((cash: number, l: PartnerLedger, t: CarryTerms) => TierOutcom
 ];
 
 /**
+ * Pay one distribution down the tiers, against whatever the ledger says is due
+ * (capitalOutstanding + prefAccrued). Returns the new ledger, the allocation rows and the trace.
+ */
+export function distribute(
+  terms: CarryTerms,
+  partnerId: string,
+  before: PartnerLedger,
+  event: { id: string; date: string; amount: number },
+  kind: EventTrace['kind'],
+  accrual: AccrualNote,
+): StepResult {
+  const outcomes: TierOutcome[] = [];
+  let cash = event.amount;
+  let ledger = before;
+  for (const step of TIER_STEPS) {
+    const out = step(cash, ledger, terms);
+    outcomes.push(out);
+    cash = out.remaining;
+    ledger = out.ledger;
+  }
+
+  const lp = outcomes.reduce((s, o) => s + o.lp, 0);
+  const gp = outcomes.reduce((s, o) => s + o.gp, 0);
+  ledger = { ...ledger, distributedLp: ledger.distributedLp + lp, distributedGp: ledger.distributedGp + gp };
+
+  return {
+    ledger,
+    allocations: outcomes.map((o) => ({ eventId: event.id, partnerId, tier: o.tier, lp: o.lp, gp: o.gp })),
+    trace: {
+      eventId: event.id,
+      date: event.date,
+      kind,
+      amount: event.amount,
+      accrual,
+      ledgerAfter: ledger,
+      steps: outcomes.map((o) => ({
+        eventId: event.id,
+        partnerId,
+        tier: o.tier,
+        available: o.available,
+        owed: o.owed,
+        lp: o.lp,
+        gp: o.gp,
+        remaining: o.remaining,
+        explanation: o.explanation,
+      })),
+    },
+  };
+}
+
+/**
  * Apply one event (already scaled to this partner's share) to the ledger.
  *
  * This is a pure "reducer": (state, event) → new state + outputs. The whole run is
@@ -44,7 +98,7 @@ const TIER_STEPS: ((cash: number, l: PartnerLedger, t: CarryTerms) => TierOutcom
  *   - per-tier storage: the allocations are the rows,
  *   - hypothetical liquidation: apply a pretend distribution and look at the result.
  */
-export function applyEvent(
+export function applyEuropean(
   terms: CarryTerms,
   partnerId: string,
   before: PartnerLedger,
@@ -69,62 +123,5 @@ export function applyEvent(
     };
   }
 
-  // Distribution: run the tiers in order, each taking what it's owed from what's left.
-  const outcomes: TierOutcome[] = [];
-  let cash = event.amount;
-  for (const step of TIER_STEPS) {
-    const out = step(cash, ledger, terms);
-    outcomes.push(out);
-    cash = out.remaining;
-    ledger = out.ledger;
-  }
-
-  const lp = outcomes.reduce((s, o) => s + o.lp, 0);
-  const gp = outcomes.reduce((s, o) => s + o.gp, 0);
-  ledger = { ...ledger, distributedLp: ledger.distributedLp + lp, distributedGp: ledger.distributedGp + gp };
-
-  return {
-    ledger,
-    allocations: outcomes.map((o) => ({ eventId: event.id, partnerId, tier: o.tier, lp: o.lp, gp: o.gp })),
-    trace: {
-      eventId: event.id,
-      date: event.date,
-      kind,
-      amount: event.amount,
-      accrual: accrued.note,
-      ledgerAfter: ledger,
-      steps: outcomes.map((o) => ({
-        eventId: event.id,
-        partnerId,
-        tier: o.tier,
-        available: o.available,
-        owed: o.owed,
-        lp: o.lp,
-        gp: o.gp,
-        remaining: o.remaining,
-        explanation: o.explanation,
-      })),
-    },
-  };
-}
-
-export interface RunResult {
-  ledger: PartnerLedger;
-  allocations: TierAllocation[];
-  trace: EventTrace[];
-}
-
-/** Run every event for one partner. */
-export function runEuropean(terms: CarryTerms, partnerId: string, events: FundEvent[]): RunResult {
-  return events.reduce<RunResult>(
-    (acc, event) => {
-      const step = applyEvent(terms, partnerId, acc.ledger, event);
-      return {
-        ledger: step.ledger,
-        allocations: acc.allocations.concat(step.allocations),
-        trace: acc.trace.concat(step.trace),
-      };
-    },
-    { ledger: emptyLedger(), allocations: [], trace: [] },
-  );
+  return distribute(terms, partnerId, ledger, event, kind, accrued.note);
 }

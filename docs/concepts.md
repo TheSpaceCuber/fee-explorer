@@ -125,6 +125,58 @@ preset shows a net IRR of 8.0% at an 8% hurdle. This is why LPs care about the c
 earns pref again. Paying that pref pushes the GP below c, so a small catch-up happens again.
 The formula handles this because it works on running totals.
 
+## The American (deal-by-deal) waterfall (M4)
+
+In a **European** waterfall, *all* contributed capital plus the hurdle must come back before the
+GP earns any carry. In an **American** one, only the capital of deals that have been **sold** is
+due. So the GP can take carry on an early winner while other deals are still held, and some of
+those may turn out to be losers.
+
+### How the engine models it
+
+- Every deal has its own hurdle account (its capital plus pref accruing on it). So do the fees.
+- A distribution says which deal it came from and how much **cost** it sold. That share of the
+  deal's account (capital + its pref) moves into a **due** account. So does a matching share of
+  the fees (cost sold ÷ all cost outstanding).
+- The usual tiers (ROC → pref → catch-up → split) run against *due*, exactly as in European.
+- A **write-off** is a distribution of 0 that sells the deal's whole cost: its capital becomes due
+  and nothing pays it.
+
+### Loss recovery
+
+| Setting | What happens to a written-off deal's capital | Who it favours |
+|---|---|---|
+| Recovered first (`realized`) | stays due: later winners must pay it back before more carry | LPs |
+| Ignored (`none`) | forgiven: each deal stands alone ("pure" deal-by-deal) | GP |
+
+### Clawback
+
+Because American can pay carry the whole fund never earns, LPAs add a **clawback**. At the end of
+the fund the GP compares what it received with what a whole-fund (European) calculation would
+give on the same cash flows, and pays back the excess:
+
+```
+clawback = max(0, American carry − European carry)        (per partner)
+GP keeps = min(American, European)
+```
+
+With NAV still held, the comparison uses the hypothetical sale ("if sold today"), so the clawback
+is an **exposure**, like accrued carry. Real clawbacks are usually capped at carry *after the GP's
+taxes*, and often backed by escrow or personal guarantees. This model ignores taxes.
+
+### Three things the cases teach
+
+1. **Clawback restores the money, not the time value.** In the first version of the American
+   preset the GP returned all $6m of carry, but four years late, so the LP's net IRR (5.0%) still
+   trailed the gross (5.2%).
+2. **American is not always more carry.** Case H4 and the American preset with losses
+   "recovered first" both pay the GP *less* than European. Each deal's capital keeps earning pref
+   until *that* deal is sold, while European stops pref on capital as soon as any distribution
+   returns it. What American reliably gives the GP is **earlier** carry.
+3. **Without loss recovery, carry can be earned on a losing fund** (case H2N): a write-off then a
+   winner, total out < total in, yet the GP gets carry on the winner. The clawback takes it all
+   back at the end.
+
 ## Accrued carry and hypothetical liquidation (M2)
 
 While a fund still holds investments (NAV), the GP hasn't been paid carry on them yet, but it
@@ -228,6 +280,7 @@ goes out of range. The result is checked against `pyxirr`, which matches Excel.
 | Fee periods are valid and don't overlap; rates between 0 and 10% | |
 | A partner's fee class must exist; the GP commitment can't have one | The GP doesn't charge itself fees. |
 | Total cost sold ≤ total investment called | Invested capital (the fee basis) can't go negative. |
+| American: every investment call and distribution names a deal; a deal can't sell more cost than was invested in it | Otherwise there is nothing to make due. |
 
 ## Numbers and rounding
 
@@ -257,3 +310,12 @@ because the engine generates them later.
 The fix: fees after the NAV date aren't billed (the NAV is a valuation as of that date), and the
 accrual now throws if time ever runs backwards, so this kind of bug fails loudly. Hand-worked
 case F7 pins it down. No hand-picked example would have found it. The random funds did.
+
+## Testing lesson 3: hand-worked cases catch mistakes in both directions
+
+Writing the M4 cases, I made three arithmetic slips in the fixture: an LP total, and two cash flows
+on a day when a fee was paid and a distribution received. The engine disagreed with the fixture, and
+working through each disagreement showed the **fixture** was wrong, not the engine. That's the
+point of independent expected values: when the two disagree, you have to reason it out, and either
+side can be at fault. The property-test generator also needed two fixes of its own: a $0 capital
+call that named a deal, and rounding "cost sold" up past what a deal had left.

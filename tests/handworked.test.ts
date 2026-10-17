@@ -95,6 +95,13 @@ describe('hand-worked cases', () => {
         expect(byDate(lpCashFlows(input, result)).length).toBe(expected.lpFlows.length);
       }
 
+      if (expected.clawback) {
+        expect(result.comparison, 'expected an American comparison').not.toBeNull();
+        expect(result.comparison!.americanCarry).toBeCloseTo(expected.clawback.american, 9);
+        expect(result.comparison!.europeanCarry).toBeCloseTo(expected.clawback.european, 9);
+        expect(result.comparison!.clawback).toBeCloseTo(expected.clawback.clawback, 9);
+      }
+
       const m = computeMetrics(input, result);
       if (expected.bridge) {
         for (const [k, v] of Object.entries(expected.bridge)) {
@@ -113,11 +120,11 @@ describe('hand-worked cases', () => {
   }
 });
 
-/** Sum flows per date, so [call, fee call] on one day compare as one flow. */
+/** Sum flows per date, so [call, fee call] on one day compare as one flow. Zero flows (e.g. a write-off) are dropped. */
 function byDate(flows: DatedFlow[]): [string, number][] {
   const m = new Map<string, number>();
   for (const f of flows) m.set(f.date, (m.get(f.date) ?? 0) + f.amount);
-  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  return [...m.entries()].filter(([, a]) => Math.abs(a) > 1e-12).sort((a, b) => (a[0] < b[0] ? -1 : 1));
 }
 
 interface Expected {
@@ -129,4 +136,5 @@ interface Expected {
   fees?: { total: number; lines: { date: string; partnerId: string; amount: number }[] };
   lpFlows?: DatedFlow[];
   bridge?: Record<string, number>;
+  clawback?: { american: number; european: number; clawback: number };
 }

@@ -1,5 +1,5 @@
 import { yearFraction } from '../daycount';
-import type { AccrualNote, CarryTerms, Compounding, ISODate, PartnerLedger } from '../types';
+import type { AccrualNote, CarryTerms, Compounding, ISODate, PartnerLedger, SubAccount } from '../types';
 
 /**
  * Bring the hurdle account up to `date`.
@@ -37,10 +37,23 @@ export function accrue(
   if (years < 0) throw new Error(`Hurdle accrual went backwards: ${ledger.asOf} → ${date}`);
   const prefAfter = years === 0 ? prefBefore : grow(capital, prefBefore, terms.hurdleRate, years, terms.compounding);
 
+  const next: PartnerLedger = { ...ledger, asOf: date, prefAccrued: prefAfter };
+  // American: every deal's account and the fee account accrue the same way, on the same clock.
+  if (years > 0 && ledger.deals) {
+    next.deals = Object.fromEntries(
+      Object.entries(ledger.deals).map(([id, a]) => [id, growAccount(a, terms, years)]),
+    );
+  }
+  if (years > 0 && ledger.feeAccount) next.feeAccount = growAccount(ledger.feeAccount, terms, years);
+
   return {
-    ledger: { ...ledger, asOf: date, prefAccrued: prefAfter },
+    ledger: next,
     note: { years, compounding: terms.compounding, capital, prefBefore, prefAfter },
   };
+}
+
+function growAccount(a: SubAccount, terms: CarryTerms, years: number): SubAccount {
+  return { capital: a.capital, pref: grow(a.capital, a.pref, terms.hurdleRate, years, terms.compounding) };
 }
 
 /** New prefAccrued after `t` years. Exported for tests and the docs. */

@@ -9,9 +9,13 @@ export function renderTiles(root: HTMLElement, m: FundMetrics, state: UiState): 
   const share = m.gpShareOfProfit;
   let shareNote = `Target ${pct(c, 0)}`;
   if (share !== null) {
-    if (state.terms.catchUpRate === 0) shareNote = `Below ${pct(c, 0)}: no catch-up, so the pref is carry-free`;
-    else if (share < c - 1e-6) shareNote = `Below ${pct(c, 0)}: still in the catch-up zone`;
-    else shareNote = `Fully caught up to ${pct(c, 0)}`;
+    const below = share < c - 1e-6;
+    if (share < 1e-6) shareNote = 'No carry: the whole fund never cleared the hurdle';
+    else if (m.clawback > 0) shareNote = `After the ${money(m.clawback)} clawback`;
+    else if (!below) shareNote = `Fully caught up to ${pct(c, 0)}`;
+    else if (state.terms.catchUpRate === 0) shareNote = `Below ${pct(c, 0)}: no catch-up, so the pref is carry-free`;
+    else if (state.terms.structure === 'american') shareNote = `Below ${pct(c, 0)}: deal-by-deal pref and losses held carry back`;
+    else shareNote = `Below ${pct(c, 0)}: still in the catch-up zone`;
   }
 
   const tiles: [string, string, string][] = [
@@ -19,6 +23,9 @@ export function renderTiles(root: HTMLElement, m: FundMetrics, state: UiState): 
     ['Distributed to LPs', money(m.distributedLp), 'Cash back, after carry'],
     ['Management fees', money(m.fees), m.fees > 0 ? `${pct(m.fees / m.paidIn)} of paid-in` : 'Fees are off'],
     ['GP carry paid', money(m.carryGp), m.accruedCarry > 0 ? `+ ${money(m.accruedCarry)} accrued on NAV` : 'Cash actually paid to the GP'],
+    ...(state.terms.structure === 'american'
+      ? [['Clawback', money(m.clawback), m.clawback > 0 ? 'GP pays back at the end' : 'None: American ≤ European'] as [string, string, string]]
+      : []),
     ['GP share of profit', pct(share), shareNote],
     ['DPI', multiple(m.dpi), 'Cash back per $1 paid in'],
     ['TVPI', multiple(m.tvpi), m.nav > 0 ? `Includes ${money(m.netNav)} net NAV` : 'Same as DPI: no NAV left'],

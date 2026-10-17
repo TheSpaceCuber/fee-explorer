@@ -4,6 +4,7 @@ import { PRESETS } from '../scenarios/presets';
 import { piecesFor, renderChart, TIER_STYLE, type Piece } from './business/chart';
 import { renderInputs } from './business/inputs';
 import { renderBridge } from './business/bridge';
+import { renderComparison } from './business/comparison';
 import { renderFeeChart, renderFeeTable } from './business/fees';
 import { renderAllocTable, renderLegend, renderLpTable, renderTiles } from './business/panels';
 import { LAST_STEP, renderStepThrough } from './business/stepthrough';
@@ -76,6 +77,8 @@ function update() {
   });
   renderLpTable(el('lp-table'), result.partners, state, input);
   renderBridge(el('bridge'), metrics);
+  el('comparison-panel').hidden = result.comparison === null;
+  renderComparison(el('comparison'), input, result);
   renderFeeChart(el('fee-chart'), result.fees, showTooltipHtml, hideTooltip);
   renderFeeTable(el('fee-table'), result.fees);
   el('fees-panel').hidden = result.fees.length === 0;

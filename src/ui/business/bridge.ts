@@ -16,7 +16,7 @@ interface Step {
   key: string;
   label: string;
   value: number;
-  kind: 'total' | 'minus';
+  kind: 'total' | 'minus' | 'plus';
   color: string;
   hatched: boolean;
   note: string;
@@ -35,6 +35,9 @@ export function renderBridge(root: HTMLElement, m: FundMetrics): void {
     { key: 'fees', label: 'Management fees', value: b.fees, kind: 'minus', color: 'var(--tier-pref)', hatched: true, note: 'Paid to the GP whatever the result' },
     { key: 'carry', label: 'Carry paid', value: b.carryPaid, kind: 'minus', color: 'var(--tier-split)', hatched: true, note: 'From the waterfall' },
     { key: 'accrued', label: 'Accrued carry', value: b.accruedCarry, kind: 'minus', color: 'var(--tier-split)', hatched: true, note: 'On the NAV, if sold' },
+    ...(b.clawback > 0
+      ? [{ key: 'clawback', label: 'Clawback', value: b.clawback, kind: 'plus' as const, color: 'var(--tier-catchup)', hatched: false, note: 'Excess carry the GP pays back' }]
+      : []),
     { key: 'net', label: 'Net profit', value: b.netProfit, kind: 'total', color: 'var(--tier-roc)', hatched: false, note: 'To all partners' },
   ];
 
@@ -44,7 +47,9 @@ export function renderBridge(root: HTMLElement, m: FundMetrics): void {
   const ROW = 34;
   const BAR = 20;
   const plotW = W - LABEL - RIGHT;
-  const x = (v: number) => LABEL + (Math.max(0, v) / b.grossProfit) * plotW;
+  // The running total can go above gross profit only by the clawback, so scale to the larger of the two.
+  const scaleMax = Math.max(b.grossProfit, b.netProfit);
+  const x = (v: number) => LABEL + (Math.max(0, v) / scaleMax) * plotW;
   const H = steps.length * ROW;
 
   let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bridge from gross profit to net profit">`;
@@ -59,17 +64,22 @@ export function renderBridge(root: HTMLElement, m: FundMetrics): void {
     if (s.kind === 'total') {
       from = 0;
       to = s.value;
-    } else {
+    } else if (s.kind === 'minus') {
       from = running - s.value;
       to = running;
       running = from;
+    } else {
+      from = running;
+      to = running + s.value;
+      running = to;
     }
     const fill = s.hatched ? `url(#bridge-hatch-${s.key === 'fees' ? 'pref' : 'split'})` : s.color;
     svg += `<text class="row-label" x="0" y="${yTop + BAR / 2 + 4}">${s.label}</text>`;
     if (to - from > 1e-12) svg += `<rect x="${x(from)}" y="${yTop}" width="${Math.max(1, x(to) - x(from))}" height="${BAR}" rx="3" fill="${fill}"><title>${s.label}: ${money(s.value, 2)} · ${s.note}</title></rect>`;
     // Thin connector from the end of this bar to the next row, so the eye can follow the running total.
-    if (i < steps.length - 1) svg += `<line class="connector" x1="${x(s.kind === 'total' ? to : from)}" x2="${x(s.kind === 'total' ? to : from)}" y1="${yTop + BAR}" y2="${yTop + ROW}"/>`;
-    svg += `<text class="total-label" x="${x(to) + 8}" y="${yTop + BAR / 2 + 4}">${s.kind === 'minus' ? '−' : ''}${money(s.value, 1)}</text>`;
+    const end = s.kind === 'minus' ? from : to;
+    if (i < steps.length - 1) svg += `<line class="connector" x1="${x(end)}" x2="${x(end)}" y1="${yTop + BAR}" y2="${yTop + ROW}"/>`;
+    svg += `<text class="total-label" x="${x(to) + 8}" y="${yTop + BAR / 2 + 4}">${s.kind === 'minus' ? '−' : s.kind === 'plus' ? '+' : ''}${money(s.value, 1)}</text>`;
   });
   svg += '</svg>';
 

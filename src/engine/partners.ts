@@ -1,8 +1,10 @@
-import { applyEvent, runEuropean } from './carry/european';
+import { applyEvent, runPartner } from './carry/waterfall';
 import { feeCalls, mergeFeeCalls, partnerFees } from './fees/managementFee';
 import {
   TIERS,
   type CarryTerms,
+  type Comparison,
+  type ISODate,
   type DatedFlow,
   type FundAllocation,
   type FundEvent,
@@ -43,7 +45,7 @@ export function runFund(input: FundInput): WaterfallResult {
     const base = input.events.map((e) => scaleEvent(e, share));
     const fees = partnerFees(input.fees, p, base, input.nav?.date);
     const events = mergeFeeCalls(base, feeCalls(fees));
-    const run = runEuropean(terms, p.id, events);
+    const run = runPartner(terms, p.id, events);
 
     /*
      * Hypothetical liquidation: "if the fund sold everything at NAV today, who would get what?"
@@ -71,12 +73,21 @@ export function runFund(input: FundInput): WaterfallResult {
       liquidation,
       fees,
       flows: partnerFlows(events, run.allocations),
+      clawback: 0,
     };
-    return { result, liquidationRows };
+    return { result, liquidationRows, lastDate: events.at(-1)?.date };
   });
 
   const partners = runs.map((r) => r.result);
   const liquidationAllocations = input.nav ? aggregate([LIQUIDATION_ID], runs.map((r) => r.liquidationRows)) : null;
+
+  // American: compare with European on the same flows, and claw back any excess carry.
+  let comparison: Comparison | null = null;
+  if (input.terms.structure === 'american') {
+    const lastDates = runs.map((r) => r.lastDate).filter((d): d is ISODate => d !== undefined);
+    const date = input.nav?.date ?? lastDates.reduce((a, b) => (a > b ? a : b), lastDates[0] ?? '1970-01-01');
+    comparison = clawBack(input, partners, date);
+  }
 
   return {
     partners,
@@ -90,7 +101,39 @@ export function runFund(input: FundInput): WaterfallResult {
       allocations: liquidationAllocations,
     },
     fees: partners.flatMap((p) => p.fees).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+    comparison,
   };
+}
+
+/**
+ * Clawback: at the end of the fund the GP must not have received more carry than a whole-of-fund
+ * (European) calculation would have given it on the same cash flows. Per partner:
+ *
+ *     clawback = max(0, American carry − European carry)
+ *
+ * "Carry" here is carry paid plus accrued carry on any remaining NAV. With NAV left, the clawback is
+ * what would be owed if the fund were sold at NAV today (an exposure, like accrued carry).
+ * It's paid back to that partner on `date`, so it's added to the partner's cash flows. The result
+ * is that the GP keeps min(American, European). Real clawbacks are often capped at carry net of
+ * the GP's taxes; this model ignores taxes.
+ */
+function clawBack(input: FundInput, partners: PartnerResult[], date: ISODate): Comparison {
+  const european = runFund({ ...input, terms: { ...input.terms, structure: 'european' } });
+  const carryOf = (p: PartnerResult) => p.ledger.distributedGp + (p.liquidation?.steps.reduce((s, x) => s + x.gp, 0) ?? 0);
+  let americanCarry = 0;
+  let europeanCarry = 0;
+  let clawback = 0;
+  for (const p of partners) {
+    const eu = european.partners.find((x) => x.partnerId === p.partnerId)!;
+    const am = carryOf(p);
+    const euCarry = carryOf(eu);
+    americanCarry += am;
+    europeanCarry += euCarry;
+    p.clawback = Math.max(0, am - euCarry);
+    clawback += p.clawback;
+    if (p.clawback > 0) p.flows.push({ date, amount: p.clawback });
+  }
+  return { european, americanCarry, europeanCarry, clawback, date };
 }
 
 /**

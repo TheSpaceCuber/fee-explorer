@@ -123,6 +123,9 @@ input[type='number'], input[type='date'], input[type='text'], select {
 .row { display: grid; grid-template-columns: 1fr 90px 28px; gap: 6px; align-items: center; }
 .row.lp { grid-template-columns: 1fr 50px 92px 28px; }
 .row.dist { grid-template-columns: 1fr 62px 62px 28px; }
+.row > * { min-width: 0; } /* grid items default to min-width: auto, and date inputs won't shrink below ~130px */
+.row.call.with-deal { grid-template-columns: 1fr 40px 62px 28px; }
+.row.dist.with-deal { grid-template-columns: 1fr 40px 56px 56px 28px; }
 .row select { padding: 5px 4px; font-size: 12px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pair[hidden], .fee-fields[hidden] { display: none; }

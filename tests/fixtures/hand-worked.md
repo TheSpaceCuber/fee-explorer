@@ -324,3 +324,77 @@ it hasn't happened yet. Fees 1, paid-in 81.
 Hypothetical sale of 85: ROC 81, SPLIT 4 → accrued carry 0.8, net NAV 84.2. TVPI = 84.2 / 81.
 *Found by a property test:* before the fix, the 07-01 and 10-01 fee calls moved the ledger's
 clock past the NAV date, and the liquidation accrued pref over a negative time span.
+
+---
+
+# Milestone 4: American (deal-by-deal) waterfall and clawback
+
+## Conventions
+
+- Investment calls and distributions carry a `dealId`. A **write-off** is a distribution of 0
+  whose `costRealized` is the deal's cost.
+- Each deal has its own hurdle account (capital + pref, accruing as usual). Fees sit in a separate
+  fee account.
+- When a distribution realizes cost K of deal d, the fraction K / (deal d's capital) of d's
+  account moves into the **due** account. So does the fraction K / (all deals' capital) of the fee
+  account. Then ROC → PREF → CATCHUP → SPLIT run against the due account, as before.
+- `lossRecovery: 'realized'`: whatever is still due after a distribution stays due (losses on
+  realized deals are recovered from later deals before carry). `'none'`: it's forgiven.
+- **Clawback** = max(0, American carry − European carry on the same flows), per partner, at the end
+  of the fund (last event, or the NAV date with a hypothetical sale). The GP pays it back to the
+  LPs on that date, so the GP keeps min(American, European).
+
+Unless stated: one LP, commitment 100, 0% hurdle, no catch-up, 20% carry, no fees.
+Deal A: 50 called on 2025-01-01. Deal B: 50 called on 2025-01-01.
+
+## H1 — winner first, then a write-off
+A sold for 80 on 2026-01-01 (cost 50). B written off on 2027-01-01.
+- d1: A's 50 becomes due. ROC 50, SPLIT 30 → **GP 6**, LP 24.
+- d2: B's 50 becomes due, nothing comes in. The 50 stays due (realized loss recovery).
+- European on the same flows: 100 in, 80 out → no profit → carry 0.
+- **Clawback 6.** The GP gives back all its carry. The LP received 74 (ROC 50 + 24), plus the
+  clawback of 6 = **80**, which is everything that came out.
+
+## H2 — write-off first, then a winner (realized loss recovery)
+B written off on 2026-01-01, A sold for 80 on 2027-01-01.
+- d1: B's 50 becomes due, nothing paid. It stays due.
+- d2: A's 50 is added → due 100. ROC 80. Nothing left for carry.
+**GP 0, clawback 0.** The loss on B is recovered from A before any carry.
+
+## H2N — same, pure deal-by-deal (no loss recovery)
+- d1: B's 50 becomes due, nothing paid, then **forgiven**.
+- d2: only A's 50 is due. ROC 50, SPLIT 30 → **GP 6**.
+- European carry is 0 → **clawback 6.** Without the clawback, the GP would keep carry on a fund
+  that lost money. This is why LPs insist on clawbacks under American waterfalls.
+
+## H3 — profitable fund, carry paid early, part clawed back
+A sold for 120 on 2026-01-01, B written off on 2027-01-01.
+- American: d1 ROC 50, SPLIT 70 → **GP 14**, LP 56. d2: the 50 loss stays due.
+- European: d1 due 100 → ROC 100, SPLIT 20 → GP 4.
+- **Clawback 14 − 4 = 10.** The GP keeps 4, the same as European. LP: 106 in 2026 (ROC 50 + 56),
+  then the clawback of 10 in 2027 (B's write-off pays nothing) = **116** = 120 − 4.
+
+## H4 — American can pay the GP *less* than European (10% hurdle)
+A sold for 80 on 2026-01-01, B sold for 70 on 2027-01-01.
+- American, d1: A's account 50 × 1.1 = 55 → ROC 50, PREF 5, SPLIT 25 → GP 5, LP 20.
+- American, d2: B's account has run 2 years: 50 × 1.21 = 60.5 → ROC 50, PREF 10.5, SPLIT 9.5 → GP 1.9.
+  **American carry 6.9.**
+- European, d1: H = 110 → ROC 80 → C = 20, P = 10. d2: H = 30 × 1.1 = 33 → ROC 20, PREF 13,
+  SPLIT 37 → GP 7.4. **European carry 7.4.**
+- **Clawback 0** (American ≤ European). The GP keeps 6.9.
+
+Why? European returned 80 of capital in year 1, which stopped pref accruing on it. American only
+returned A's 50; B's capital kept earning pref for a second year. Total pref: American 15.5,
+European 13. More pref means less carry. "American is GP-friendly" is about **timing**: carry
+arrives earlier. It isn't guaranteed to be more carry in total.
+
+## H5 — fees allocated to deals by cost
+F1's fees (2% on commitment in 2025, 0.5 a quarter). Deal A 40 and deal B 40 called on 2025-01-01.
+A sold for 60 on 2025-07-01 (cost 40), B sold for 60 on 2026-01-01 (cost 40).
+- d1 (07-01, after that day's fee call): fee account 1.5. A is 40 of 80 cost → half the fees, 0.75,
+  become due with A's 40 → due 40.75. ROC 40.75, SPLIT 19.25 → GP 3.85, LP 15.4.
+  (The LP's net cash that day is 56.15 received − 0.5 fee paid = 55.65.)
+- 10-01 fee 0.5 → fee account 1.25.
+- d2: B is the last 40 of 40 → all 1.25 → due 41.25. ROC 41.25, SPLIT 18.75 → GP 3.75, LP 15.
+**LP 112.4, GP 7.6**, the same as European on these flows (F1). With a 0% hurdle and every
+deal profitable, deal-by-deal and whole-fund agree.

@@ -39,8 +39,13 @@ export function renderInputs(
     <p class="hint">Simple: only capital earns the hurdle. Compound: unpaid pref earns it too, so more pref is owed.</p>
     ${segmented('GP catch-up', 'catchup', [['0', 'None'], ['0.5', '50%'], ['0.8', '80%'], ['1', '100%']], String(t.catchUpRate), [])}
     <p class="hint">The GP's share of each dollar after the pref, until it has its carry rate of all profit. ILPA's model LPA uses 80%.</p>
-    ${segmented('Structure', 'structure', [['european', 'European'], ['american', 'American']], t.structure, ['american'])}
-    <p class="hint">American (deal-by-deal) arrives in M4.</p>
+    ${segmented('Structure', 'structure', [['european', 'European'], ['american', 'American']], t.structure, [])}
+    ${t.structure === 'american' ? segmented('Losses on sold deals', 'loss', [['realized', 'Recovered first'], ['none', 'Ignored']], t.lossRecovery ?? 'realized', []) : ''}
+    <p class="hint">${
+      t.structure === 'american'
+        ? 'Deal by deal: carry is earned as each deal is sold. "Recovered first": losses on deals already sold are paid back from later deals before more carry. A clawback at the end returns any carry above the whole-fund calculation.'
+        : 'Whole fund: carry only after ALL contributed capital plus the hurdle is back.'
+    }</p>
 
     <h3>Management fees</h3>
     <label class="check"><input type="checkbox" id="fees-on" ${f.enabled ? 'checked' : ''}> Charge management fees</label>
@@ -82,15 +87,15 @@ export function renderInputs(
     <button class="add-btn" id="lp-add">+ Add partner</button>
     <p class="hint">"GP commitment" is the manager investing its own money alongside the LPs. It pays no fees and no carry, and is left out of LP metrics.</p>
 
-    <h3>Investment calls <span class="hint">(date, $m)</span></h3>
-    ${flowRows('calls', state.calls)}
+    <h3>Investment calls <span class="hint">(date, ${t.structure === 'american' ? 'deal, ' : ''}$m)</span></h3>
+    ${flowRows('calls', state.calls, t.structure === 'american')}
     <button class="add-btn" data-flow-add="calls">+ Add capital call</button>
     ${f.enabled ? '<p class="hint">Fee calls are added automatically from the fee schedule.</p>' : ''}
 
-    <h3>Distributions <span class="hint">(date, $m, cost sold $m)</span></h3>
-    ${flowRows('dists', state.dists)}
+    <h3>Distributions <span class="hint">(date, ${t.structure === 'american' ? 'deal, ' : ''}$m, cost sold $m)</span></h3>
+    ${flowRows('dists', state.dists, t.structure === 'american')}
     <button class="add-btn" data-flow-add="dists">+ Add distribution</button>
-    <p class="hint">"Cost sold" is what the fund originally paid for the investments it sold. It only matters for fees on invested capital.</p>
+    <p class="hint">"Cost sold" is what the fund originally paid for the investments it sold. It sets the fee basis after the investment period and, for American waterfalls, how much capital becomes due. A write-off is a distribution of 0 with its full cost sold.</p>
 
     <h3>Remaining value</h3>
     <div class="row">
@@ -152,6 +157,8 @@ export function renderInputs(
     );
   bindRadio('compounding', (v) => (state.terms.compounding = v as typeof state.terms.compounding));
   bindRadio('catchup', (v) => (state.terms.catchUpRate = Number(v)));
+  bindRadio('structure', (v) => (state.terms.structure = v as typeof state.terms.structure), true);
+  bindRadio('loss', (v) => (state.terms.lossRecovery = v as 'none' | 'realized'));
   bindRadio('fee-basis', (v) => (f.postBasis = v as typeof f.postBasis));
   bindRadio('fee-discount', (v) => (f.discountMode = v as typeof f.discountMode), true);
 
@@ -211,6 +218,7 @@ export function renderInputs(
       el.addEventListener('input', () => {
         const row = state[key][Number(el.dataset.i)]!;
         if (el.type === 'date') row.date = el.value;
+        else if (el.dataset.field === 'deal') row.deal = el.value;
         else if (el.dataset.field === 'cost') row.cost = el.valueAsNumber || 0;
         else row.amount = el.valueAsNumber;
         edited();
@@ -224,7 +232,7 @@ export function renderInputs(
     );
     $(`[data-flow-add="${key}"]`).addEventListener('click', () => {
       const last = state[key].at(-1);
-      const row: Flow = { id: newId(key === 'calls' ? 'call' : 'dist'), date: nextYear(last?.date), amount: 10 };
+      const row: Flow = { id: newId(key === 'calls' ? 'call' : 'dist'), date: nextYear(last?.date), amount: 10, deal: last?.deal || 'A' };
       if (key === 'dists') row.cost = 0;
       state[key].push(row);
       structural();
@@ -255,11 +263,12 @@ function segmented(label: string, name: string, options: [string, string][], cur
   </div>`;
 }
 
-function flowRows(key: 'calls' | 'dists', flows: Flow[]) {
+function flowRows(key: 'calls' | 'dists', flows: Flow[], showDeal: boolean) {
   return `<div class="rows">${flows
     .map(
-      (f, i) => `<div class="row ${key === 'dists' ? 'dist' : ''}">
+      (f, i) => `<div class="row ${key === 'dists' ? 'dist' : 'call'} ${showDeal ? 'with-deal' : ''}">
         <input type="date" aria-label="Date" data-flow="${key}" data-i="${i}" value="${f.date}">
+        ${showDeal ? `<input type="text" aria-label="Deal" data-flow="${key}" data-field="deal" data-i="${i}" value="${esc(f.deal ?? '')}">` : ''}
         <input type="number" aria-label="Amount" data-flow="${key}" data-i="${i}" min="0" step="1" value="${f.amount}">
         ${key === 'dists' ? `<input type="number" aria-label="Cost sold" data-flow="${key}" data-field="cost" data-i="${i}" min="0" step="1" value="${f.cost ?? 0}">` : ''}
         <button class="icon-btn" data-flow-remove="${key}" data-i="${i}" aria-label="Remove row">✕</button>

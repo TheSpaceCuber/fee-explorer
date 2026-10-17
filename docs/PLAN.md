@@ -178,7 +178,7 @@ Each milestone ends with a git commit, tests passing, and an updated `concepts.m
 | **M1** European carry basics ✅ | Scaffold. Hand-worked cases written **before** the engine. Waterfall: ROC → pref → 80/20 split (no catch-up), annual compounding. Several LPs with identical terms, each run per partner. XIRR, DPI, TVPI, NAV input. Property tests. Minimal Tab 1. | Hand cases and properties pass. XIRR matches the oracle to 1e-6. The page updates live. |
 | **M2** Catch-up and step-through ✅ | Catch-up at 0/50/100% with validation. All compounding conventions. Step-through mode with plain-English explanations. Accrued carry on NAV (hypothetical liquidation). Presets: clean European, inside the catch-up zone. Terms based on ILPA's model whole-of-fund waterfall. | Hand cases include one that stops partway through catch-up. |
 | **M3** Management fees ✅ | Fee periods (commitment basis during the investment period, invested capital after), step-down, quarterly in advance, funded by capital calls. Size-discount bands (fee ratchet). Fee classes per LP, so per-LP waterfalls now diverge. GP commitment as a fee-free, carry-free partner. Gross → fees → carry → net bridge chart. | A hand-worked fee schedule matches. The bridge reconciles gross to net exactly. |
-| **M4** American waterfall | Deal-by-deal with a `lossRecovery` toggle (`none` vs `realized`), end-of-fund clawback. Side-by-side with European on the same flows. Realized-loss preset. | American carry minus clawback equals European carry on the reference cases. |
+| **M4** American waterfall ✅ | Deal-by-deal with a `lossRecovery` toggle (`none` vs `realized`), end-of-fund clawback. Side-by-side with European on the same flows. Realized-loss preset. | American carry minus clawback equals European carry on the reference cases. |
 | **M5** Evergreen performance fees | NAV series, subscriptions and redemptions, performance fee with high-water mark and optional hurdle, periodic crystallization. Shown next to closed-ended carry. | Hand cases: fee only on new highs, none after a drawdown until recovered. |
 | **M6** Mandates (stretch) | A single-investor vehicle that commits into underlying funds. Two layers of fees (mandate-level and underlying-fund-level), looked through to the investor's net. | The look-through bridge reconciles. |
 | **M7** Tab 2 pipeline | Terms config → validation and approval → cash-flow ingestion → fee calc → waterfall calc run → allocation output (rounding) → reporting. JSON in/out per stage, generated rows, DDL sketches. Re-run with new terms adds a calc run instead of overwriting one. | Every row shown is generated from the engine, none hard-coded. |
@@ -199,6 +199,9 @@ Each milestone ends with a git commit, tests passing, and an updated `concepts.m
 - Catch-up rate must be 0 or greater than the carry rate. This is enforced in validation.
   The ILPA model LPA brackets an 80:20 catch-up, so the UI offers 0 / 50 / 80 / 100%.
 - Both European and American waterfalls. American has a loss-recovery toggle.
+- American: per-deal hurdle accounts; a distribution's cost sold moves that share into "due";
+  fees shared across deals by cost; clawback = max(0, American − European), per partner, at the
+  end (or the NAV date, as an exposure).
 - NAV input. TVPI includes NAV. Accrued carry on NAV comes in M2.
 - Python is used only as the XIRR oracle for now. I may write my own Python engine later, so the
   fixtures and data shapes stay language-neutral (see §0).

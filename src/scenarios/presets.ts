@@ -19,15 +19,23 @@ const LPS: Partner[] = [
   { id: 'LP Gamma (family office)', role: 'LP', commitment: 20 },
 ];
 
-/** A $100m fund that calls $95m over 2020–2022. */
+/** A $100m fund that calls $95m over 2020–2022, one deal per call. */
 const CALLS: FundEvent[] = [
-  { id: 'call-1', kind: 'capital_call', date: '2020-03-31', investment: 30, fee: 0 },
-  { id: 'call-2', kind: 'capital_call', date: '2020-12-31', investment: 25, fee: 0 },
-  { id: 'call-3', kind: 'capital_call', date: '2021-09-30', investment: 25, fee: 0 },
-  { id: 'call-4', kind: 'capital_call', date: '2022-06-30', investment: 15, fee: 0 },
+  { id: 'call-1', kind: 'capital_call', date: '2020-03-31', investment: 30, fee: 0, dealId: 'A' },
+  { id: 'call-2', kind: 'capital_call', date: '2020-12-31', investment: 25, fee: 0, dealId: 'B' },
+  { id: 'call-3', kind: 'capital_call', date: '2021-09-30', investment: 25, fee: 0, dealId: 'C' },
+  { id: 'call-4', kind: 'capital_call', date: '2022-06-30', investment: 15, fee: 0, dealId: 'D' },
 ];
 
-const dist = (id: string, date: string, amount: number): FundEvent => ({ id, kind: 'distribution', date, amount });
+/** A distribution from one deal, with the cost of what was sold (needed for American waterfalls and fees). */
+const dist = (id: string, date: string, amount: number, dealId: string, costRealized: number): FundEvent => ({
+  id,
+  kind: 'distribution',
+  date,
+  amount,
+  dealId,
+  costRealized,
+});
 
 export const PRESETS: Preset[] = [
   {
@@ -47,14 +55,14 @@ export const PRESETS: Preset[] = [
         { id: 'GP commitment', role: 'GP', commitment: 2 },
       ],
       events: [
-        { id: 'call-1', kind: 'capital_call', date: '2020-03-31', investment: 25, fee: 0 },
-        { id: 'call-2', kind: 'capital_call', date: '2020-12-31', investment: 25, fee: 0 },
-        { id: 'call-3', kind: 'capital_call', date: '2021-09-30', investment: 22, fee: 0 },
-        { id: 'call-4', kind: 'capital_call', date: '2022-06-30', investment: 13, fee: 0 },
-        { id: 'dist-1', kind: 'distribution', date: '2023-06-30', amount: 20, costRealized: 12 },
-        { id: 'dist-2', kind: 'distribution', date: '2024-12-31', amount: 45, costRealized: 25 },
-        { id: 'dist-3', kind: 'distribution', date: '2026-06-30', amount: 60, costRealized: 30 },
-        { id: 'dist-4', kind: 'distribution', date: '2027-12-31', amount: 50, costRealized: 13 },
+        { id: 'call-1', kind: 'capital_call', date: '2020-03-31', investment: 25, fee: 0, dealId: 'A' },
+        { id: 'call-2', kind: 'capital_call', date: '2020-12-31', investment: 25, fee: 0, dealId: 'B' },
+        { id: 'call-3', kind: 'capital_call', date: '2021-09-30', investment: 22, fee: 0, dealId: 'C' },
+        { id: 'call-4', kind: 'capital_call', date: '2022-06-30', investment: 13, fee: 0, dealId: 'D' },
+        dist('dist-1', '2023-06-30', 20, 'D', 12),
+        dist('dist-2', '2024-12-31', 45, 'B', 25),
+        dist('dist-3', '2026-06-30', 60, 'A', 25),
+        dist('dist-4', '2027-12-31', 50, 'C', 22),
       ],
       nav: { date: '2027-12-31', amount: 10 },
       fees: {
@@ -91,10 +99,10 @@ export const PRESETS: Preset[] = [
       partners: LPS,
       events: [
         ...CALLS,
-        dist('dist-1', '2023-06-30', 20),
-        dist('dist-2', '2024-12-31', 45),
-        dist('dist-3', '2026-06-30', 60),
-        dist('dist-4', '2027-12-31', 50),
+        dist('dist-1', '2023-06-30', 20, 'B', 15),
+        dist('dist-2', '2024-12-31', 45, 'A', 30),
+        dist('dist-3', '2026-06-30', 60, 'C', 25),
+        dist('dist-4', '2027-12-31', 50, 'B', 10),
       ],
       nav: { date: '2027-12-31', amount: 10 },
     },
@@ -111,10 +119,30 @@ export const PRESETS: Preset[] = [
       partners: LPS,
       events: [
         ...CALLS,
-        dist('dist-1', '2023-06-30', 20),
-        dist('dist-2', '2024-12-31', 45),
-        dist('dist-3', '2026-06-30', 60),
-        dist('dist-4', '2027-12-31', 12),
+        dist('dist-1', '2023-06-30', 20, 'B', 25),
+        dist('dist-2', '2024-12-31', 45, 'A', 30),
+        dist('dist-3', '2026-06-30', 60, 'C', 25),
+        dist('dist-4', '2027-12-31', 12, 'D', 15),
+      ],
+    },
+  },
+  {
+    id: 'american-loss',
+    name: 'American: a write-off and a clawback',
+    blurb:
+      'Pure deal by deal (losses ignored), with ILPA-style carry terms. Deal A doubles in 2023 and the GP takes carry on it ' +
+      'right away. Deal B is written off in 2024. C and D each make a profit on their own, so the GP earns carry on them ' +
+      'too, even though B was never made up. On the whole fund the GP would earn $9m. It received $14m, so $5m is clawed ' +
+      'back at the end. Now set losses to "Recovered first": American carry drops below European.',
+    input: {
+      terms: { structure: 'american', lossRecovery: 'none', hurdleRate: 0.08, compounding: 'annual', catchUpRate: 0.8, carryRate: 0.2 },
+      partners: LPS,
+      events: [
+        ...CALLS,
+        dist('dist-a', '2023-06-30', 60, 'A', 30),
+        dist('write-off-b', '2024-06-30', 0, 'B', 25),
+        dist('dist-c', '2025-12-31', 45, 'C', 25),
+        dist('dist-d', '2027-06-30', 35, 'D', 15),
       ],
     },
   },
@@ -128,9 +156,9 @@ export const PRESETS: Preset[] = [
       terms: { structure: 'european', hurdleRate: 0.1, compounding: 'annual', catchUpRate: 0, carryRate: 0.2 },
       partners: [{ id: 'LP', role: 'LP', commitment: 100 }],
       events: [
-        { id: 'c1', kind: 'capital_call', date: '2025-01-01', investment: 100, fee: 0 },
-        dist('d1', '2026-01-01', 60),
-        dist('d2', '2027-01-01', 100),
+        { id: 'c1', kind: 'capital_call', date: '2025-01-01', investment: 100, fee: 0, dealId: 'A' },
+        dist('d1', '2026-01-01', 60, 'A', 40),
+        dist('d2', '2027-01-01', 100, 'A', 60),
       ],
     },
   },

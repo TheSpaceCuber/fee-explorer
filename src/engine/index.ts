@@ -4,6 +4,7 @@
 export * from './types';
 export { runFund, LIQUIDATION_ID } from './partners';
 export { grow } from './carry/hurdle';
+export { carryPaid, profitPaid } from './carry/tiers';
 export { computeMetrics, computeBridge, lpCashFlows, partnersCashFlows, type FundMetrics, type Bridge } from './metrics';
 export { discountedRate, billingDates, investedCapital } from './fees/managementFee';
 export { xirr } from './xirr';

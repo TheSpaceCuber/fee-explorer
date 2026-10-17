@@ -30,7 +30,11 @@ export function validate(input: FundInput): ValidationIssue[] {
   const { terms, partners, events, nav } = input;
 
   // --- Terms ---
-  if (terms.structure !== 'european') add('terms.structure', 'Only European is supported until M4.');
+  if (terms.structure !== 'european' && terms.structure !== 'american') add('terms.structure', 'Must be european or american.');
+  if (terms.lossRecovery !== undefined && terms.lossRecovery !== 'none' && terms.lossRecovery !== 'realized') {
+    add('terms.lossRecovery', 'Must be none or realized.');
+  }
+  const american = terms.structure === 'american';
   if (!COMPOUNDINGS.includes(terms.compounding)) add('terms.compounding', `Must be one of: ${COMPOUNDINGS.join(', ')}.`);
   if (!isNonNegative(terms.hurdleRate)) add('terms.hurdleRate', 'Must be a number ≥ 0.');
   if (!(Number.isFinite(terms.carryRate) && terms.carryRate >= 0 && terms.carryRate < 1)) {
@@ -66,6 +70,8 @@ export function validate(input: FundInput): ValidationIssue[] {
   // Invested capital (investment called − cost sold) can't go negative: you can't sell more cost
   // than you bought. It's the fee basis after the investment period.
   let invested = 0;
+  // American: the same check per deal, and every flow must say which deal it belongs to.
+  const dealInvested = new Map<string, number>();
   // A distribution before any capital has been called would meet an empty hurdle account and
   // fall straight into the split, so the GP would earn carry on money no LP put in.
   let seenCall = false;
@@ -83,6 +89,11 @@ export function validate(input: FundInput): ValidationIssue[] {
     if (e.kind === 'capital_call') {
       seenCall = true;
       invested += e.investment;
+      if (american) {
+        // A call that names a deal registers it, even for 0. Investment with no deal is an error.
+        if (e.dealId) dealInvested.set(e.dealId, (dealInvested.get(e.dealId) ?? 0) + e.investment);
+        else if (e.investment > 0) add(`${at}.dealId`, 'American waterfalls need a deal on every investment call.');
+      }
       if (!isNonNegative(e.investment)) add(`${at}.investment`, 'Must be ≥ 0.');
       if (!isNonNegative(e.fee)) add(`${at}.fee`, 'Must be ≥ 0.');
     } else {
@@ -92,6 +103,15 @@ export function validate(input: FundInput): ValidationIssue[] {
         if (!isNonNegative(e.costRealized)) add(`${at}.costRealized`, 'Must be ≥ 0.');
         invested -= e.costRealized;
         if (invested < -1e-9) add(`${at}.costRealized`, 'Total cost sold exceeds total investment called.');
+      }
+      if (american) {
+        if (!e.dealId) add(`${at}.dealId`, 'American waterfalls need a deal on every distribution.');
+        else if (!dealInvested.has(e.dealId)) add(`${at}.dealId`, `Deal "${e.dealId}" has no capital call before this date.`);
+        else {
+          const left = dealInvested.get(e.dealId)! - (e.costRealized ?? 0);
+          if (left < -1e-9) add(`${at}.costRealized`, `More cost sold than was invested in deal "${e.dealId}".`);
+          dealInvested.set(e.dealId, left);
+        }
       }
     }
   });

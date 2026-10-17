@@ -1,5 +1,5 @@
 {
-  "description": "Hand-worked waterfall cases. See hand-worked.md for the arithmetic. Language-neutral: any engine (TS, Python) should reproduce these. Allocations are fund-level sums; tiers not listed are expected to be 0. Tolerance 1e-9 unless stated. metrics.accruedCarry (default 0) is the GP share of a hypothetical liquidation of the NAV; TVPI and IRR use NAV net of it. M3 cases add `fees` (management fee terms), partner roles/fee classes, and expected fees, lpFlows (LP investors' dated cash flows, summed per date) and bridge (gross profit -> fees -> carry -> net, all partners).",
+  "description": "Hand-worked waterfall cases. See hand-worked.md for the arithmetic. Language-neutral: any engine (TS, Python) should reproduce these. Allocations are fund-level sums; tiers not listed are expected to be 0. Tolerance 1e-9 unless stated. metrics.accruedCarry (default 0) is the GP share of a hypothetical liquidation of the NAV; TVPI and IRR use NAV net of it. M3 cases add `fees` (management fee terms), partner roles/fee classes, and expected fees, lpFlows (LP investors' dated cash flows, summed per date) and bridge (gross profit -> fees -> carry -> net, all partners). M4 cases add terms.structure 'american' with lossRecovery, dealId on events, and expected.clawback {american, european, clawback}; totals are before clawback, lpFlows and DPI include the clawback paid to LPs at the end.",
   "defaults": {
     "terms": {
       "structure": "european",
@@ -2317,6 +2317,658 @@
           "tvpi": 1.0395061728395063,
           "irr": null,
           "accruedCarry": 0.8
+        }
+      }
+    },
+    {
+      "id": "H1",
+      "title": "American: winner first, then a write-off; full clawback",
+      "terms": {
+        "structure": "american",
+        "lossRecovery": "realized",
+        "hurdleRate": 0
+      },
+      "events": [
+        {
+          "id": "cA",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "A"
+        },
+        {
+          "id": "cB",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "B"
+        },
+        {
+          "id": "dA",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 80,
+          "costRealized": 50,
+          "dealId": "A"
+        },
+        {
+          "id": "dB",
+          "kind": "distribution",
+          "date": "2027-01-01",
+          "amount": 0,
+          "costRealized": 50,
+          "dealId": "B"
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "dA",
+            "tier": "ROC",
+            "lp": 50,
+            "gp": 0
+          },
+          {
+            "eventId": "dA",
+            "tier": "SPLIT",
+            "lp": 24,
+            "gp": 6
+          }
+        ],
+        "totals": {
+          "lp": 74,
+          "gp": 6
+        },
+        "endState": {
+          "capitalOutstanding": 50,
+          "prefAccrued": 0
+        },
+        "clawback": {
+          "american": 6,
+          "european": 0,
+          "clawback": 6
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -100
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 74
+          },
+          {
+            "date": "2027-01-01",
+            "amount": 6
+          }
+        ],
+        "bridge": {
+          "grossProfit": -20,
+          "fees": 0,
+          "carryPaid": 6,
+          "accruedCarry": 0,
+          "clawback": 6,
+          "netProfit": -20
+        },
+        "metrics": {
+          "paidIn": 100,
+          "dpi": 0.8,
+          "tvpi": 0.8,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "H2",
+      "title": "American: write-off first, loss recovered before carry",
+      "terms": {
+        "structure": "american",
+        "lossRecovery": "realized",
+        "hurdleRate": 0
+      },
+      "events": [
+        {
+          "id": "cA",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "A"
+        },
+        {
+          "id": "cB",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "B"
+        },
+        {
+          "id": "dB",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 0,
+          "costRealized": 50,
+          "dealId": "B"
+        },
+        {
+          "id": "dA",
+          "kind": "distribution",
+          "date": "2027-01-01",
+          "amount": 80,
+          "costRealized": 50,
+          "dealId": "A"
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "dA",
+            "tier": "ROC",
+            "lp": 80,
+            "gp": 0
+          }
+        ],
+        "totals": {
+          "lp": 80,
+          "gp": 0
+        },
+        "endState": {
+          "capitalOutstanding": 20,
+          "prefAccrued": 0
+        },
+        "clawback": {
+          "american": 0,
+          "european": 0,
+          "clawback": 0
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -100
+          },
+          {
+            "date": "2027-01-01",
+            "amount": 80
+          }
+        ],
+        "bridge": {
+          "grossProfit": -20,
+          "fees": 0,
+          "carryPaid": 0,
+          "accruedCarry": 0,
+          "clawback": 0,
+          "netProfit": -20
+        },
+        "metrics": {
+          "paidIn": 100,
+          "dpi": 0.8,
+          "tvpi": 0.8,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "H2N",
+      "title": "American, no loss recovery: carry on a losing fund, clawed back",
+      "terms": {
+        "structure": "american",
+        "lossRecovery": "none",
+        "hurdleRate": 0
+      },
+      "events": [
+        {
+          "id": "cA",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "A"
+        },
+        {
+          "id": "cB",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "B"
+        },
+        {
+          "id": "dB",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 0,
+          "costRealized": 50,
+          "dealId": "B"
+        },
+        {
+          "id": "dA",
+          "kind": "distribution",
+          "date": "2027-01-01",
+          "amount": 80,
+          "costRealized": 50,
+          "dealId": "A"
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "dA",
+            "tier": "ROC",
+            "lp": 50,
+            "gp": 0
+          },
+          {
+            "eventId": "dA",
+            "tier": "SPLIT",
+            "lp": 24,
+            "gp": 6
+          }
+        ],
+        "totals": {
+          "lp": 74,
+          "gp": 6
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "clawback": {
+          "american": 6,
+          "european": 0,
+          "clawback": 6
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -100
+          },
+          {
+            "date": "2027-01-01",
+            "amount": 80
+          }
+        ],
+        "bridge": {
+          "grossProfit": -20,
+          "fees": 0,
+          "carryPaid": 6,
+          "accruedCarry": 0,
+          "clawback": 6,
+          "netProfit": -20
+        },
+        "metrics": {
+          "paidIn": 100,
+          "dpi": 0.8,
+          "tvpi": 0.8,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "H3",
+      "title": "American: profitable fund, early carry partly clawed back",
+      "terms": {
+        "structure": "american",
+        "lossRecovery": "realized",
+        "hurdleRate": 0
+      },
+      "events": [
+        {
+          "id": "cA",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "A"
+        },
+        {
+          "id": "cB",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "B"
+        },
+        {
+          "id": "dA",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 120,
+          "costRealized": 50,
+          "dealId": "A"
+        },
+        {
+          "id": "dB",
+          "kind": "distribution",
+          "date": "2027-01-01",
+          "amount": 0,
+          "costRealized": 50,
+          "dealId": "B"
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "dA",
+            "tier": "ROC",
+            "lp": 50,
+            "gp": 0
+          },
+          {
+            "eventId": "dA",
+            "tier": "SPLIT",
+            "lp": 56,
+            "gp": 14
+          }
+        ],
+        "totals": {
+          "lp": 106,
+          "gp": 14
+        },
+        "endState": {
+          "capitalOutstanding": 50,
+          "prefAccrued": 0
+        },
+        "clawback": {
+          "american": 14,
+          "european": 4,
+          "clawback": 10
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -100
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 106
+          },
+          {
+            "date": "2027-01-01",
+            "amount": 10
+          }
+        ],
+        "bridge": {
+          "grossProfit": 20,
+          "fees": 0,
+          "carryPaid": 14,
+          "accruedCarry": 0,
+          "clawback": 10,
+          "netProfit": 16
+        },
+        "metrics": {
+          "paidIn": 100,
+          "dpi": 1.16,
+          "tvpi": 1.16,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "H4",
+      "title": "American pays less carry than European (10% hurdle): no clawback",
+      "terms": {
+        "structure": "american",
+        "lossRecovery": "realized"
+      },
+      "events": [
+        {
+          "id": "cA",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "A"
+        },
+        {
+          "id": "cB",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 50,
+          "fee": 0,
+          "dealId": "B"
+        },
+        {
+          "id": "dA",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 80,
+          "costRealized": 50,
+          "dealId": "A"
+        },
+        {
+          "id": "dB",
+          "kind": "distribution",
+          "date": "2027-01-01",
+          "amount": 70,
+          "costRealized": 50,
+          "dealId": "B"
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "dA",
+            "tier": "ROC",
+            "lp": 50,
+            "gp": 0
+          },
+          {
+            "eventId": "dA",
+            "tier": "PREF",
+            "lp": 5,
+            "gp": 0
+          },
+          {
+            "eventId": "dA",
+            "tier": "SPLIT",
+            "lp": 20,
+            "gp": 5
+          },
+          {
+            "eventId": "dB",
+            "tier": "ROC",
+            "lp": 50,
+            "gp": 0
+          },
+          {
+            "eventId": "dB",
+            "tier": "PREF",
+            "lp": 10.5,
+            "gp": 0
+          },
+          {
+            "eventId": "dB",
+            "tier": "SPLIT",
+            "lp": 7.6,
+            "gp": 1.9
+          }
+        ],
+        "totals": {
+          "lp": 143.1,
+          "gp": 6.9
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "clawback": {
+          "american": 6.9,
+          "european": 7.4,
+          "clawback": 0
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -100
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 75
+          },
+          {
+            "date": "2027-01-01",
+            "amount": 68.1
+          }
+        ],
+        "bridge": {
+          "grossProfit": 50,
+          "fees": 0,
+          "carryPaid": 6.9,
+          "accruedCarry": 0,
+          "clawback": 0,
+          "netProfit": 43.1
+        },
+        "metrics": {
+          "paidIn": 100,
+          "dpi": 1.431,
+          "tvpi": 1.431,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "H5",
+      "title": "American: fees allocated to deals by cost",
+      "terms": {
+        "structure": "american",
+        "lossRecovery": "realized",
+        "hurdleRate": 0
+      },
+      "events": [
+        {
+          "id": "cA",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 40,
+          "fee": 0,
+          "dealId": "A"
+        },
+        {
+          "id": "cB",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 40,
+          "fee": 0,
+          "dealId": "B"
+        },
+        {
+          "id": "dA",
+          "kind": "distribution",
+          "date": "2025-07-01",
+          "amount": 60,
+          "costRealized": 40,
+          "dealId": "A"
+        },
+        {
+          "id": "dB",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 60,
+          "costRealized": 40,
+          "dealId": "B"
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "dA",
+            "tier": "ROC",
+            "lp": 40.75,
+            "gp": 0
+          },
+          {
+            "eventId": "dA",
+            "tier": "SPLIT",
+            "lp": 15.4,
+            "gp": 3.85
+          },
+          {
+            "eventId": "dB",
+            "tier": "ROC",
+            "lp": 41.25,
+            "gp": 0
+          },
+          {
+            "eventId": "dB",
+            "tier": "SPLIT",
+            "lp": 15,
+            "gp": 3.75
+          }
+        ],
+        "totals": {
+          "lp": 112.4,
+          "gp": 7.6
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "clawback": {
+          "american": 7.6,
+          "european": 7.6,
+          "clawback": 0
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -80.5
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-07-01",
+            "amount": 55.65
+          },
+          {
+            "date": "2025-10-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 56.25
+          }
+        ],
+        "bridge": {
+          "grossProfit": 40,
+          "fees": 2,
+          "carryPaid": 7.6,
+          "accruedCarry": 0,
+          "clawback": 0,
+          "netProfit": 30.4
+        },
+        "metrics": {
+          "paidIn": 82,
+          "dpi": 1.3707317073170733,
+          "tvpi": 1.3707317073170733,
+          "irr": null
+        }
+      },
+      "partners": [
+        {
+          "id": "LP-A",
+          "role": "LP",
+          "commitment": 100,
+          "feeClassId": "standard"
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              }
+            ]
+          }
         }
       }
     }

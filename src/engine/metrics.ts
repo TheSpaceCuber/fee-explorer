@@ -18,6 +18,7 @@ import { xirr } from './xirr';
  *   − management fees
  *   − carry paid
  *   − accrued carry (on the NAV)
+ *   + clawback (American only: excess carry the GP pays back)
  *   = net profit to partners
  *
  * This always adds up, because every dollar of distributions goes either to partners or to carry,
@@ -32,6 +33,8 @@ export interface Bridge {
   fees: number;
   carryPaid: number;
   accruedCarry: number;
+  /** American only: carry the GP pays back at the end. */
+  clawback: number;
   netProfit: number;
   /** (distributions + NAV) / investment: the deals' own multiple. */
   grossMoic: number | null;
@@ -52,6 +55,11 @@ export interface FundMetrics {
   accruedCarry: number;
   /** The LPs' share of the NAV, after accrued carry. */
   netNav: number;
+  /**
+   * American only: carry the GP pays back to the LPs at the end. Counted in DPI once the fund is
+   * fully realized (no NAV); with NAV left it's an exposure, counted in TVPI only.
+   */
+  clawback: number;
   dpi: number | null;
   tvpi: number | null;
   irr: number | null;
@@ -88,6 +96,8 @@ export function computeMetrics(input: FundInput, result: WaterfallResult): FundM
   const nav = input.nav?.amount ?? 0;
   const carryGp = sum(result.partners.map((p) => p.ledger.distributedGp));
   const accruedCarry = sum(result.partners.map(liqGp));
+  const clawback = sum(lps.map((p) => p.clawback));
+  const realizedClawback = input.nav && input.nav.amount > 0 ? 0 : clawback;
 
   // GP share of profit, over the partners that pay carry.
   const profit = sum(lps.map((p) => p.ledger.distributedLp + p.ledger.distributedGp + p.share * nav - p.ledger.contributed));
@@ -100,10 +110,11 @@ export function computeMetrics(input: FundInput, result: WaterfallResult): FundM
     nav,
     accruedCarry,
     netNav,
-    dpi: paidIn > 0 ? distributedLp / paidIn : null,
-    tvpi: paidIn > 0 ? (distributedLp + netNav) / paidIn : null,
+    clawback,
+    dpi: paidIn > 0 ? (distributedLp + realizedClawback) / paidIn : null,
+    tvpi: paidIn > 0 ? (distributedLp + netNav + clawback) / paidIn : null,
     irr: xirr(lpCashFlows(input, result)),
-    gpShareOfProfit: profit > 1e-9 ? (carryGp + accruedCarry) / profit : null,
+    gpShareOfProfit: profit > 1e-9 ? (carryGp + accruedCarry - clawback) / profit : null,
     bridge: computeBridge(input, result),
   };
 }
@@ -123,6 +134,7 @@ export function computeBridge(input: FundInput, result: WaterfallResult): Bridge
   const fees = sum(result.fees.map((f) => f.amount));
   const carryPaid = sum(result.allocations.map((a) => a.gp));
   const accruedCarry = result.liquidation?.gp ?? 0;
+  const clawback = result.comparison?.clawback ?? 0;
   const grossProfit = distributions + nav - investment;
   const feeFlows = result.fees.map((f) => ({ date: f.date, amount: -f.amount }));
 
@@ -134,7 +146,8 @@ export function computeBridge(input: FundInput, result: WaterfallResult): Bridge
     fees,
     carryPaid,
     accruedCarry,
-    netProfit: grossProfit - fees - carryPaid - accruedCarry,
+    clawback,
+    netProfit: grossProfit - fees - carryPaid - accruedCarry + clawback,
     grossMoic: investment > 0 ? (distributions + nav) / investment : null,
     grossIrr: xirr([...investmentFlows, ...outFlows]),
     irrAfterFees: xirr([...investmentFlows, ...feeFlows, ...outFlows]),

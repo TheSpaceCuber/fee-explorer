@@ -24,12 +24,13 @@ const distributions = (input: FundInput) =>
  */
 describe('generator coverage', () => {
   it('produces funds that pay pref, catch-up, carry, and end mid-catch-up', () => {
-    const counts = { pref: 0, catchUp: 0, split: 0, endsInCatchUp: 0, fees: 0, investedBasisFees: 0 };
+    const counts = { pref: 0, catchUp: 0, split: 0, endsInCatchUp: 0, fees: 0, investedBasisFees: 0, clawback: 0 };
     // Fixed seed: a coverage check must not pass or fail depending on luck.
     // (The properties below still use a fresh random seed every run, to keep exploring.)
     for (const input of fc.sample(fundArb, { numRuns: 2000, seed: 20261017 })) {
       const result = runFund(input);
       if (result.fees.length > 0) counts.fees++;
+      if ((result.comparison?.clawback ?? 0) > EPS) counts.clawback++;
       if (result.fees.some((f) => f.basis === 'invested_capital' && f.amount > EPS)) counts.investedBasisFees++;
       const p = result.partners[0]!;
       const steps = p.trace.flatMap((ev) => ev.steps);
@@ -46,6 +47,7 @@ describe('generator coverage', () => {
     expect(counts.endsInCatchUp).toBeGreaterThan(10);
     expect(counts.fees).toBeGreaterThan(400);
     expect(counts.investedBasisFees).toBeGreaterThan(200);
+    expect(counts.clawback).toBeGreaterThan(50);
   }, 30_000); // 2,000 funds with fee schedules take a few seconds
 });
 
@@ -175,7 +177,7 @@ describe('waterfall properties', () => {
         // Net profit computed bottom-up from each partner's own ledger and liquidation:
         const fromPartners = result.partners.reduce((s, p) => {
           const navLp = p.liquidation?.steps.reduce((t, x) => t + x.lp, 0) ?? 0;
-          return s + p.ledger.distributedLp + navLp - p.ledger.contributed;
+          return s + p.ledger.distributedLp + navLp + p.clawback - p.ledger.contributed;
         }, 0);
         expect(Math.abs(bridge.netProfit - fromPartners)).toBeLessThanOrEqual(1e-7 * Math.max(1, Math.abs(fromPartners)));
       }),
@@ -214,6 +216,27 @@ describe('waterfall properties', () => {
         if (!gp) return;
         expect(gp.ledger.distributedGp).toBe(0);
         expect(gp.fees).toHaveLength(0);
+      }),
+    );
+  });
+
+  it('American: after the clawback, the GP never keeps more carry than European would give', () => {
+    fc.assert(
+      fc.property(fundArb, (input) => {
+        const result = runFund({ ...input, terms: { ...input.terms, structure: 'american' } });
+        const c = result.comparison!;
+        expect(c.americanCarry - c.clawback).toBeLessThanOrEqual(c.europeanCarry + 1e-9 * Math.max(1, c.europeanCarry));
+      }),
+    );
+  });
+
+  it('American: recovering realized losses never gives the GP more carry than ignoring them', () => {
+    fc.assert(
+      fc.property(fundArb, (input) => {
+        const carry = (lossRecovery: 'none' | 'realized') =>
+          runFund({ ...input, terms: { ...input.terms, structure: 'american', lossRecovery } }).allocations.reduce((s, a) => s + a.gp, 0);
+        const none = carry('none');
+        expect(carry('realized')).toBeLessThanOrEqual(none + EPS * Math.max(1, none));
       }),
     );
   });

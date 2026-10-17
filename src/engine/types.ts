@@ -28,7 +28,16 @@ export const COMPOUNDINGS: readonly Compounding[] = ['simple', 'annual', 'quarte
  * compiler stops us using features before they exist.
  */
 export interface CarryTerms {
-  structure: 'european';
+  /**
+   * european: whole-of-fund. All contributed capital (+ pref) comes back before any carry.
+   * american: deal-by-deal. Each realized deal's capital (+ pref) comes back, then carry on that deal.
+   */
+  structure: 'european' | 'american';
+  /**
+   * American only. 'realized' (default): losses on realized deals stay owed and are recovered from
+   * later deals before carry. 'none': pure deal-by-deal, where each deal stands alone.
+   */
+  lossRecovery?: 'none' | 'realized';
   /** Preferred return ("hurdle"), e.g. 0.08 for 8% a year. */
   hurdleRate: number;
   compounding: Compounding;
@@ -133,6 +142,8 @@ export interface CapitalCall {
   date: ISODate;
   investment: number;
   fee: number;
+  /** Which deal the investment is for. Required for American waterfalls. */
+  dealId?: string;
 }
 
 /** A distribution: money flowing out of the fund, to be split by the waterfall. */
@@ -146,6 +157,8 @@ export interface Distribution {
    * reduces invested capital, which is the fee basis after the investment period.
    */
   costRealized?: number;
+  /** Which deal the cash came from. Required for American waterfalls. */
+  dealId?: string;
 }
 
 export type FundEvent = CapitalCall | Distribution;
@@ -205,6 +218,19 @@ export interface PartnerLedger {
   distributedLp: number;
   distributedGp: number;
   cumulative: Cumulative;
+  /**
+   * American only. Each deal's own hurdle account (capital not yet realized + pref on it), and one
+   * for fees. capitalOutstanding / prefAccrued above are then the "due" account: what has been
+   * realized and must be paid before carry.
+   */
+  deals?: Record<string, SubAccount>;
+  feeAccount?: SubAccount;
+}
+
+/** A hurdle account that isn't due yet (American waterfalls). */
+export interface SubAccount {
+  capital: number;
+  pref: number;
 }
 
 /** One tier's share of one distribution, for one partner. This is what a database row stores. */
@@ -244,6 +270,23 @@ export interface AccrualNote {
   prefAfter: number;
 }
 
+/** American: what a distribution moved into the "due" account before the tiers ran. */
+export interface RealizationNote {
+  dealId: string | null;
+  costRealized: number;
+  /** Already due from earlier distributions (unrecovered losses), before this one. */
+  carriedCapital: number;
+  carriedPref: number;
+  /** Moved from the deal's own account. */
+  dealCapital: number;
+  dealPref: number;
+  /** Fees (and their pref) allocated to this realization. */
+  feeCapital: number;
+  feePref: number;
+  /** Left unpaid and forgiven (lossRecovery 'none'). */
+  forgiven: number;
+}
+
 /** Everything that happened to one partner at one event: for step-through and debugging. */
 export interface EventTrace {
   eventId: string;
@@ -255,6 +298,8 @@ export interface EventTrace {
   /** Tier steps (distributions only; empty for calls). */
   steps: TraceStep[];
   ledgerAfter: PartnerLedger;
+  /** American only. */
+  realization?: RealizationNote;
 }
 
 export interface PartnerResult {
@@ -272,8 +317,25 @@ export interface PartnerResult {
   liquidation: EventTrace | null;
   /** Management fees charged to this partner. */
   fees: FeeLine[];
-  /** This partner's cash flows: calls (investment + fee) negative, distributions received positive. */
+  /**
+   * This partner's cash flows: calls (investment + fee) negative, distributions received positive,
+   * plus any clawback received at the end.
+   */
   flows: DatedFlow[];
+  /** American only: carry the GP pays back to this partner at the end (0 otherwise). */
+  clawback: number;
+}
+
+/** American vs European on the same flows, and the clawback that reconciles them. */
+export interface Comparison {
+  /** The same fund run as a European waterfall. */
+  european: WaterfallResult;
+  /** Carry paid + accrued, summed over partners. */
+  americanCarry: number;
+  europeanCarry: number;
+  clawback: number;
+  /** When the clawback is settled: the NAV date, or the last event. */
+  date: ISODate;
 }
 
 export type FundAllocation = Omit<TierAllocation, 'partnerId'>;
@@ -286,4 +348,6 @@ export interface WaterfallResult {
   liquidation: { lp: number; gp: number; allocations: FundAllocation[] } | null;
   /** Every fee line for every partner, in date order. */
   fees: FeeLine[];
+  /** American only: the European comparison and the clawback. */
+  comparison: Comparison | null;
 }

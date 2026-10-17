@@ -122,6 +122,19 @@ function explanation(trace: EventTrace, step: number, terms: CarryTerms): string
     const intro = isNav
       ? `<strong>This is not a real payment.</strong> It asks: if the fund sold everything for its NAV of ${money(trace.amount, 2)} today, who would get what? The GP's part is its <em>accrued carry</em>.<br><br>`
       : '';
+    const r = trace.realization;
+    if (r) {
+      // American: explain what this distribution made due before the tiers run.
+      const deal = r.dealId ? `deal ${r.dealId}` : 'every remaining deal';
+      const due = r.carriedCapital + r.carriedPref + r.dealCapital + r.dealPref + r.feeCapital + r.feePref;
+      const parts = [`${money(r.dealCapital, 2)} of its capital plus ${money(r.dealPref, 2)} of pref`];
+      if (r.feeCapital > 0) parts.push(`${money(r.feeCapital + r.feePref, 2)} of fees (with pref) allocated to it by cost`);
+      if (r.carriedCapital + r.carriedPref > 1e-9) parts.push(`${money(r.carriedCapital + r.carriedPref, 2)} still due from earlier deals (unrecovered losses)`);
+      return `${intro}<strong>Before the cash arrives (deal by deal):</strong> this ${isNav ? 'pretend sale' : 'distribution'} sells ${money(r.costRealized, 2)}
+        of cost from ${deal}. That makes due: ${parts.join(', ')}. Total due before any carry: <strong>${money(due, 2)}</strong>.
+        Deals not yet sold don't count, which is the key difference from European.
+        Press <em>Next</em> to pour the ${money(trace.amount, 2)} in.`;
+    }
     return `${intro}<strong>Before the cash arrives:</strong> the hurdle account. The LP still has ${money(a.capital, 2)} of capital outstanding.
       Over the ${years} years since the previous event, at a ${pct(terms.hurdleRate, 2)} hurdle with ${conv}, the unpaid preferred return grew from
       ${money(a.prefBefore, 2)} to <strong>${money(a.prefAfter, 2)}</strong>. Together that's ${money(a.capital + a.prefAfter, 2)} the LP must receive before the GP earns anything.
@@ -133,7 +146,9 @@ function explanation(trace: EventTrace, step: number, terms: CarryTerms): string
     const cum = trace.ledgerAfter.cumulative;
     const profit = profitPaid(cum);
     const share = profit > 0 ? carryPaid(cum) / profit : 0;
-    return `<strong>Summary:</strong> of ${money(trace.amount, 2)}, the LP ${isNav ? 'would get' : 'got'} ${money(lp, 2)} and the GP ${money(gp, 2)}.
+    const forgiven = trace.realization?.forgiven ?? 0;
+    const forgivenNote = forgiven > 1e-9 ? ` ${money(forgiven, 2)} that was due but unpaid is <strong>forgiven</strong> (losses ignored), so it won't hold back carry on later deals.` : '';
+    return `<strong>Summary:</strong> of ${money(trace.amount, 2)}, the LP ${isNav ? 'would get' : 'got'} ${money(lp, 2)} and the GP ${money(gp, 2)}.${forgivenNote}
       Counting everything paid out so far, the GP has ${pct(share)} of the profit${terms.carryRate > 0 ? ` (its carry rate is ${pct(terms.carryRate, 0)})` : ''}.`;
   }
   const s = trace.steps[step - 1]!;
