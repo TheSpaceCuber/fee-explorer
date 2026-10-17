@@ -140,3 +140,45 @@ describe('Part 3 (carry): predict answers and text claims agree with the engine'
     expect(answerOf('compounding')).toBe(0);
   });
 });
+
+describe('Parts 4–5: predict answers and text claims agree with the engine', () => {
+  const firstCarry = (allocs: { eventId: string; gp: number }[]) => allocs.find((a) => a.gp > 1e-9)?.eventId;
+
+  it('12 European vs American: American pays carry first; with losses recovered it can pay less in total', () => {
+    const r = runFund(WIDGETS.structure.input({ lossRecovery: 'realized' }));
+    expect(firstCarry(r.allocations)).toBe('dist-A'); // 2023
+    expect(firstCarry(r.comparison!.european.allocations)).toBe('dist-D'); // 2027, "with the last sale"
+    expect(r.comparison!.americanCarry).toBeLessThan(r.comparison!.europeanCarry); // "can even end up paying the GP less"
+    expect(answerOf('european-vs-american')).toBe(1);
+  });
+
+  it('13 clawback: $14m received, $9m whole-fund, $5m paid back; and it stays at 20% of deal B\u2019s $25m loss', () => {
+    const c = runFund(WIDGETS.clawback.input(WIDGETS.clawback.init())).comparison!;
+    expect(c.americanCarry).toBeCloseTo(14, 9);
+    expect(c.europeanCarry).toBeCloseTo(9, 9);
+    expect(c.clawback).toBeCloseTo(5, 9);
+    for (const dealC of [45, 50, 60, 70]) expect(runFund(WIDGETS.clawback.input({ dealC })).comparison!.clawback).toBeCloseTo(0.2 * 25, 9);
+    expect(answerOf('clawback')).toBe(1);
+  });
+
+  it('14 gross to net: about 17.0% gross, 14.5% after fees, 12.6% net', () => {
+    const m = metrics(WIDGETS.grossNet.input(WIDGETS.grossNet.init()));
+    expect(m.bridge.grossIrr!).toBeCloseTo(0.17, 2);
+    expect(m.bridge.irrAfterFees!).toBeCloseTo(0.145, 2);
+    expect(m.irr!).toBeGreaterThan(0.12);
+    expect(m.irr!).toBeLessThan(0.13); // "About 12–13%"
+    expect(answerOf('gross-to-net')).toBe(1);
+  });
+
+  it('15 net to gross: the same net result fits gross multiples from about 2.5x to 2.9x', async () => {
+    const { solveGross } = await import('../src/scenarios/calibrate');
+    const { NET_TO_GROSS_GRID, REPORTED, buyoutShape, typicalBuyoutTerms } = await import('../src/scenarios/public');
+    const r = REPORTED.adventVI;
+    const moics = NET_TO_GROSS_GRID.map((g) => solveGross(r, buyoutShape(r.vintage, 0.05), typicalBuyoutTerms(r.vintage, g)).grossMoic!);
+    expect(Math.min(...moics)).toBeGreaterThan(2.4);
+    expect(Math.min(...moics)).toBeLessThan(2.55);
+    expect(Math.max(...moics)).toBeGreaterThan(2.8);
+    expect(Math.max(...moics)).toBeLessThan(2.95);
+    expect(answerOf('net-to-gross')).toBe(1);
+  });
+});

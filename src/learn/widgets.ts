@@ -10,6 +10,7 @@ import type { WidgetId } from './lessons';
 /** Lessons 1–6 (basics and management fees). Lessons 7–11 (carry) are in widgets-carry.ts. */
 import { keepFocus, onInput, onRadio, segmented, slider, stat, type Widget } from './widget-kit';
 import { CARRY_WIDGETS } from './widgets-carry';
+import { STRUCTURE_WIDGETS } from './widgets-structure';
 
 // ------------------------------------------------------------------ 1. timeline
 
@@ -296,4 +297,4 @@ const whoPays: Widget<WhoPaysP> = {
 // ------------------------------------------------------------------ registry
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const WIDGETS: Record<WidgetId, Widget<any>> = { timeline, returns, feeRate, stepDown, feeDrag, whoPays, ...CARRY_WIDGETS };
+export const WIDGETS: Record<WidgetId, Widget<any>> = { timeline, returns, feeRate, stepDown, feeDrag, whoPays, ...CARRY_WIDGETS, ...STRUCTURE_WIDGETS };

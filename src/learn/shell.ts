@@ -48,7 +48,7 @@ export function renderLearn(root: HTMLElement, slug: string | null, h: LearnHand
           ? next.ready
             ? `<a class="pager-btn primary" id="next" href="${href({ view: 'learn', lesson: next.slug })}">${next.title} ▶</a>`
             : `<span class="pager-btn disabled" id="next" aria-disabled="true">Next: ${next.title} (coming soon)</span>`
-          : ''
+          : `<a class="pager-btn primary" href="${href({ view: 'explore' })}">Course complete: try everything in Explore ▶</a>`
       }
     </nav>`,
   );

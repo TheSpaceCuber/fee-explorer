@@ -20,7 +20,7 @@ export function renderHome(root: HTMLElement): void {
     <div class="doors">
       <a class="door primary" href="${learnHref}">
         <span class="door-title">Learn</span>
-        <span>A short course: ${READY.length} lessons so far, ${LESSONS.length} planned. Each one is a single idea, a small interactive and a takeaway.</span>
+        <span>A short course in ${PARTS.length} parts and ${READY.length < LESSONS.length ? `${READY.length} lessons so far (${LESSONS.length} planned)` : `${LESSONS.length} lessons`}. Each one is a single idea, a small interactive and a takeaway.</span>
         <span class="door-cta">${learnLabel} →</span>
       </a>
       <a class="door" href="${href({ view: 'explore' })}">

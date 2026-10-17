@@ -87,3 +87,31 @@ export function exampleFund(o: FundOptions = {}): FundInput {
     ...(fees ? { fees: { start: '2020-01-01', classes: { standard: standardFeeClass(o), ...(o.feeClasses ?? {}) } } } : {}),
   };
 }
+
+/**
+ * "Example Fund II": for the structure lessons (Part 4). One deal doubles early, one is written
+ * off, the other two make modest gains. Same shape as the "American: a write-off and a clawback"
+ * preset. No fees, so only the structure changes the numbers.
+ */
+export function writeOffFund(o: { structure?: 'european' | 'american'; lossRecovery?: 'none' | 'realized'; dealCProceeds?: number } = {}): FundInput {
+  const calls: [string, number, string][] = [
+    ['2020-03-31', 30, 'A'],
+    ['2020-12-31', 25, 'B'],
+    ['2021-09-30', 25, 'C'],
+    ['2022-06-30', 15, 'D'],
+  ];
+  const dists: [string, number, string, number][] = [
+    ['2023-06-30', 60, 'A', 30],
+    ['2024-06-30', 0, 'B', 25], // written off: all of B's cost sold for nothing
+    ['2025-12-31', o.dealCProceeds ?? 45, 'C', 25],
+    ['2027-06-30', 35, 'D', 15],
+  ];
+  return {
+    terms: { structure: o.structure ?? 'american', lossRecovery: o.lossRecovery ?? 'none', hurdleRate: 0.08, compounding: 'annual', catchUpRate: 0.8, carryRate: 0.2 },
+    partners: [{ id: 'Pension LP', role: 'LP', commitment: 100 }],
+    events: [
+      ...calls.map(([date, investment, dealId], i): FundEvent => ({ id: `call-${dealId}`, kind: 'capital_call', date, investment, fee: 0, dealId: dealId! })),
+      ...dists.map(([date, amount, dealId, costRealized]): FundEvent => ({ id: `dist-${dealId}`, kind: 'distribution', date, amount, dealId, costRealized })),
+    ],
+  };
+}

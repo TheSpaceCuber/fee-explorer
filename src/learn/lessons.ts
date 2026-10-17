@@ -8,7 +8,8 @@
 
 export type WidgetId =
   | 'timeline' | 'returns' | 'feeRate' | 'stepDown' | 'feeDrag' | 'whoPays'
-  | 'carrySplit' | 'hurdle' | 'catchUp' | 'accrued' | 'compounding';
+  | 'carrySplit' | 'hurdle' | 'catchUp' | 'accrued' | 'compounding'
+  | 'structure' | 'clawback' | 'grossNet' | 'netGross';
 
 export interface Predict {
   question: string;
@@ -297,11 +298,100 @@ export const LESSONS: Lesson[] = [
     tryThis: 'Raise the hurdle to 12%. Does the gap between simple and daily grow or shrink? Why?',
     takeaway: 'Compound pref means more is owed to LPs before carry. "Compounded annually" is the most common wording.',
   },
-  // ---------------------------------------------------------------- Parts 4–5 (coming next)
-  { slug: 'european-vs-american', part: 4, title: 'European vs American', ready: false },
-  { slug: 'clawback', part: 4, title: 'Clawback', ready: false },
-  { slug: 'gross-to-net', part: 5, title: 'Gross to net', ready: false },
-  { slug: 'net-to-gross', part: 5, title: 'Net to gross, with public data', ready: false },
+  // ---------------------------------------------------------------- Part 4
+  {
+    slug: 'european-vs-american',
+    part: 4,
+    title: 'European vs American',
+    ready: true,
+    intro: [
+      'So far every lesson used a <strong>European</strong> (whole-of-fund) waterfall: no carry until the LPs have back <em>all</em> the capital ' +
+        'they put in, plus the pref. Some funds, especially in the US, use an <strong>American</strong> (deal-by-deal) waterfall instead: each ' +
+        'deal is settled on its own when it’s sold, so the GP can earn carry on an early winner while other deals are still held.',
+      'This lesson uses <strong>Example Fund II</strong>: $95m in four deals. Deal A doubles in 2023, deal B is written off in 2024, and ' +
+        'C and D make modest gains later. No fees, so only the structure changes the numbers.',
+    ],
+    predict: {
+      question: 'Under which structure does the GP receive its first carry earlier?',
+      options: ['European', 'American', 'Both at the same time'],
+      answer: 1,
+      explain:
+        'Deal by deal, the GP takes carry on deal A as soon as it’s sold in 2023. Whole fund, it must wait until the LPs have all $95m ' +
+        'back plus the pref, which only happens with the last sale in 2027. American is about <em>timing</em>: carry comes earlier.',
+    },
+    widget: 'structure',
+    tryThis: 'Switch between "recovered first" and "ignored". With losses recovered first, American can even end up paying the GP less than European. Can you see why?',
+    takeaway: 'European waits for the whole fund; American pays carry deal by deal, so the GP gets it earlier, with a risk of overpaying if later deals lose money.',
+  },
+  {
+    slug: 'clawback',
+    part: 4,
+    title: 'Clawback',
+    ready: true,
+    intro: [
+      'Paying carry deal by deal can give the GP carry the whole fund never earns: a winner pays carry, then a loser is written off. ' +
+        'So American funds include a <strong>clawback</strong>: at the end, the GP’s carry is compared with what a whole-fund calculation ' +
+        'would have given, and any excess is paid back to the LPs.',
+      'Here losses are <em>ignored</em> deal by deal (the most GP-friendly version), so the clawback has real work to do.',
+    ],
+    predict: {
+      question: 'Deal by deal, the GP received $14m of carry. The whole-fund calculation gives $9m. At the end, the GP…',
+      options: ['keeps the $14m', 'pays back $5m', 'pays back all $14m'],
+      answer: 1,
+      explain: 'The clawback brings the GP down to the whole-fund figure: $14m − $9m = $5m back to the LPs. It never pays back more than the excess.',
+    },
+    widget: 'clawback',
+    tryThis: 'Raise deal C’s sale price. Why does the clawback stay at exactly $5m? (Hint: 20% of something on deal B.)',
+    takeaway: 'A clawback makes sure deal-by-deal carry never ends above the whole-fund amount. It returns the money, but late, so LPs still lose the time value.',
+  },
+  // ---------------------------------------------------------------- Part 5
+  {
+    slug: 'gross-to-net',
+    part: 5,
+    title: 'Gross to net: where the profit went',
+    ready: true,
+    intro: [
+      'Now everything at once, on Example Fund I: a 2% management fee stepping down after five years, and 20% carry with an 8% hurdle and ' +
+        'an 80% catch-up (the ILPA model terms).',
+      'The <strong>gross</strong> return is what the deals made. The <strong>net</strong> return is what reached the LP after fees and carry. ' +
+        'The bridge below shows where each dollar of profit went, and the same story in IRR terms.',
+    ],
+    predict: {
+      question: 'The deals earn about 17% a year (gross). Roughly what does the LP earn net, after fees and carry?',
+      options: ['About 16%', 'About 12–13%', 'About 9%'],
+      answer: 1,
+      explain:
+        'Fees take it from 17.0% to about 14.5%, and carry takes it to about 12.6%. Roughly 4–5 percentage points between gross and net is ' +
+        'common for buyout funds, which is why LPs watch both numbers.',
+    },
+    widget: 'grossNet',
+    tryThis: 'Set the fee to 0%, then the carry to 0%: you get back to the deals’ own return. Which costs the LP more here, the fee or the carry?',
+    takeaway: 'Gross minus fees minus carry equals net, always. The gap is the price of the fund manager.',
+  },
+  {
+    slug: 'net-to-gross',
+    part: 5,
+    title: 'Net to gross, with public data',
+    ready: true,
+    intro: [
+      'Can you go the other way? Public pensions publish their funds’ <strong>net</strong> results. Oregon’s pension fund, for example, ' +
+        'reports that Advent International GPE VI-A (2008) returned 2.08x and 16.3% net. It doesn’t publish the deals’ gross return ' +
+        'or the fund’s terms.',
+      'Below, the engine rebuilds a fund that matches those published figures exactly, under assumed terms. Then it re-solves under nine ' +
+        'other fee and carry assumptions.',
+    ],
+    predict: {
+      question: 'A pension reports a fund returned 2.08x and 16.3% net. Can you tell how much the deals made before fees and carry?',
+      options: ['Yes, exactly', 'Only if you also know the fee and carry terms', 'No, it can never be worked out'],
+      answer: 1,
+      explain:
+        'Many different gross returns fit the same net result, depending on the fees and carry. Press "Solve" below: the gross multiple ' +
+        'needed ranges from about 2.5x to 2.9x. With the actual terms you could pin it down, which is why LPs ask for them.',
+    },
+    widget: 'netGross',
+    tryThis: 'Press the solve button. Which matters more for the gross return needed: one extra point of fee, or five extra points of carry?',
+    takeaway: 'Net numbers alone don’t reveal gross performance or cost. You need the terms, and that’s the end of the course. The Explore view has every control at once.',
+  },
 ];
 
 export const READY = LESSONS.filter((l) => l.ready);

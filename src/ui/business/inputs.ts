@@ -32,79 +32,118 @@ export function renderInputs(
       <p class="hint">${preset ? esc(preset.blurb) : state.presetId === 'custom' ? 'You have edited the scenario.' : esc(state.note ?? '')}</p>
     </div>
 
-    <h3>Carry terms</h3>
-    ${slider('hurdle', 'Hurdle rate (preferred return)', t.hurdleRate, 0, 0.15, 0.0025, 'The annual return LPs must earn before the GP gets any carry.')}
-    ${slider('carry', 'Carry rate', t.carryRate, 0, 0.3, 0.01, "The GP's share of profit above the hurdle.")}
-    ${segmented('Pref compounding', 'compounding', [['simple', 'Simple'], ['annual', 'Annual'], ['quarterly', 'Quarterly'], ['daily', 'Daily']], t.compounding, [])}
-    <p class="hint">Simple: only capital earns the hurdle. Compound: unpaid pref earns it too, so more pref is owed.</p>
-    ${segmented('GP catch-up', 'catchup', [['0', 'None'], ['0.5', '50%'], ['0.8', '80%'], ['1', '100%']], String(t.catchUpRate), [])}
-    <p class="hint">The GP's share of each dollar after the pref, until it has its carry rate of all profit. ILPA's model LPA uses 80%.</p>
-    ${segmented('Structure', 'structure', [['european', 'European'], ['american', 'American']], t.structure, [])}
-    ${t.structure === 'american' ? segmented('Losses on sold deals', 'loss', [['realized', 'Recovered first'], ['none', 'Ignored']], t.lossRecovery ?? 'realized', []) : ''}
-    <p class="hint">${
-      t.structure === 'american'
-        ? 'Deal by deal: carry is earned as each deal is sold. "Recovered first": losses on deals already sold are paid back from later deals before more carry. A clawback at the end returns any carry above the whole-fund calculation.'
-        : 'Whole fund: carry only after ALL contributed capital plus the hurdle is back.'
-    }</p>
+    ${section(
+      'fees',
+      'Management fees',
+      f.enabled ? `${pctFmt(f.ipRate)}, then ${pctFmt(f.postRate)}` : 'off',
+      `<label class="check"><input type="checkbox" id="fees-on" ${f.enabled ? 'checked' : ''}> Charge management fees</label>
+      <div class="fee-fields" ${f.enabled ? '' : 'hidden'}>
+        ${slider('fee-ip-rate', 'Rate during the investment period (on commitment)', f.ipRate, 0, 0.025, 0.00125)}
+        ${slider('fee-post-rate', 'Rate afterwards', f.postRate, 0, 0.025, 0.00125)}
+        ${segmented('Basis afterwards', 'fee-basis', [['invested_capital', 'Invested capital'], ['commitment', 'Commitment']], f.postBasis, [])}
+        <p class="hint">Billed quarterly and paid by calling capital. "Invested capital" falls as deals are sold, so the fee steps down.
+          <a href="#/learn/the-management-fee">Lessons 3–6</a></p>
+        ${more(
+          'fee-more',
+          'More options: dates, discounts, side letters',
+          `<div class="pair">
+            <div class="field"><label for="fee-start">Fees start</label><input type="date" id="fee-start" value="${f.start}"></div>
+            <div class="field"><label for="fee-ip-end">Investment period ends</label><input type="date" id="fee-ip-end" value="${f.ipEnd}"></div>
+          </div>
+          <div class="field"><label for="fee-end">Fees end</label><input type="date" id="fee-end" value="${f.end}"></div>
+          ${segmented('Size discount', 'fee-discount', [['none', 'None'], ['whole', 'Whole'], ['marginal', 'Marginal']], f.discountMode, [])}
+          <div class="pair" ${f.discountMode === 'none' ? 'hidden' : ''}>
+            <div class="field"><label for="fee-disc-min">Commitment ≥ ($m)</label><input type="number" id="fee-disc-min" min="0" step="1" value="${f.discountMin}"></div>
+            <div class="field"><label for="fee-disc-cut">Rate cut (%)</label><input type="number" id="fee-disc-cut" min="0" step="0.05" value="${+(f.discountCut * 100).toFixed(3)}"></div>
+          </div>
+          <p class="hint">Whole: the whole commitment gets the lower rate. Marginal: only the part above the threshold does, like tax brackets.</p>
+          ${slider('fee-side-cut', 'Side-letter rate cut', f.sideLetterCut, 0, 0.01, 0.00125, 'Applies to partners set to "Side letter".')}`,
+        )}
+      </div>`,
+    )}
 
-    <h3>Management fees</h3>
-    <label class="check"><input type="checkbox" id="fees-on" ${f.enabled ? 'checked' : ''}> Charge management fees</label>
-    <div class="fee-fields" ${f.enabled ? '' : 'hidden'}>
-      <div class="pair">
-        <div class="field"><label for="fee-start">Fees start</label><input type="date" id="fee-start" value="${f.start}"></div>
-        <div class="field"><label for="fee-ip-end">Investment period ends</label><input type="date" id="fee-ip-end" value="${f.ipEnd}"></div>
+    ${section(
+      'carry',
+      'Carry terms',
+      `${pctFmt(t.hurdleRate, 0)} hurdle · ${pctFmt(t.carryRate, 0)} carry · ${t.structure === 'american' ? 'American' : 'European'}`,
+      `${slider('hurdle', 'Hurdle rate (preferred return)', t.hurdleRate, 0, 0.15, 0.0025, 'The annual return LPs must earn before the GP gets any carry.')}
+      ${slider('carry', 'Carry rate', t.carryRate, 0, 0.3, 0.01, "The GP's share of profit.")}
+      ${segmented('GP catch-up', 'catchup', [['0', 'None'], ['0.5', '50%'], ['0.8', '80%'], ['1', '100%']], String(t.catchUpRate), [])}
+      ${segmented('Structure', 'structure', [['european', 'European'], ['american', 'American']], t.structure, [])}
+      ${t.structure === 'american' ? segmented('Losses on sold deals', 'loss', [['realized', 'Recovered first'], ['none', 'Ignored']], t.lossRecovery ?? 'realized', []) : ''}
+      <p class="hint">${
+        t.structure === 'american'
+          ? 'Deal by deal, with a clawback at the end. <a href="#/learn/european-vs-american">Lessons 12–13</a>'
+          : 'Whole fund: carry only after all contributed capital plus the hurdle is back. <a href="#/learn/carry-basics">Lessons 7–10</a>'
+      }</p>
+      ${more(
+        'carry-more',
+        'More options: pref compounding',
+        `${segmented('Pref compounding', 'compounding', [['simple', 'Simple'], ['annual', 'Annual'], ['quarterly', 'Quarterly'], ['daily', 'Daily']], t.compounding, [])}
+        <p class="hint">Simple: only capital earns the hurdle. Compound: unpaid pref earns it too. <a href="#/learn/compounding">Lesson 11</a></p>`,
+      )}`,
+    )}
+
+    ${section(
+      'partners',
+      'Partners',
+      `${state.partners.length} · ${moneyShort(state.partners.reduce((s, p) => s + p.commitment, 0))} committed`,
+      `<p class="hint">Name, commitment ($m), type.</p>
+      <div class="rows">
+        ${state.partners
+          .map(
+            (p, i) => `<div class="row lp">
+              <input type="text" aria-label="Partner name" data-lp-name="${i}" value="${esc(p.id)}">
+              <input type="number" aria-label="Commitment" data-lp-commit="${i}" min="0" step="1" value="${p.commitment}">
+              <select aria-label="Partner type" data-lp-type="${i}">
+                ${PARTNER_TYPES.map(([v, , short]) => `<option value="${v}" ${v === p.type ? 'selected' : ''}>${short}</option>`).join('')}
+              </select>
+              <button class="icon-btn" data-lp-remove="${i}" aria-label="Remove ${esc(p.id)}" ${state.partners.length === 1 ? 'disabled' : ''}>✕</button>
+            </div>`,
+          )
+          .join('')}
       </div>
-      ${slider('fee-ip-rate', 'Rate during investment period (on commitment)', f.ipRate, 0, 0.025, 0.00125)}
-      ${slider('fee-post-rate', 'Rate afterwards', f.postRate, 0, 0.025, 0.00125)}
-      ${segmented('Basis afterwards', 'fee-basis', [['invested_capital', 'Invested capital'], ['commitment', 'Commitment']], f.postBasis, [])}
-      <div class="field"><label for="fee-end">Fees end</label><input type="date" id="fee-end" value="${f.end}"></div>
-      <p class="hint">Billed quarterly in advance and paid by calling capital, so fees are returned in ROC and earn pref.
-        "Invested capital" = investment called − cost of what's been sold, so the fee falls as deals exit.</p>
-      ${segmented('Size discount', 'fee-discount', [['none', 'None'], ['whole', 'Whole'], ['marginal', 'Marginal']], f.discountMode, [])}
-      <div class="pair" ${f.discountMode === 'none' ? 'hidden' : ''}>
-        <div class="field"><label for="fee-disc-min">Commitment ≥ ($m)</label><input type="number" id="fee-disc-min" min="0" step="1" value="${f.discountMin}"></div>
-        <div class="field"><label for="fee-disc-cut">Rate cut (%)</label><input type="number" id="fee-disc-cut" min="0" step="0.05" value="${+(f.discountCut * 100).toFixed(3)}"></div>
+      <button class="add-btn" id="lp-add">+ Add partner</button>
+      <p class="hint">"GP commit" is the manager investing alongside the LPs: no fees, no carry, left out of LP metrics.</p>`,
+    )}
+
+    ${section(
+      'calls',
+      'Capital calls',
+      `${state.calls.length} · ${moneyShort(state.calls.reduce((s, c) => s + c.amount, 0))}`,
+      `<p class="hint">Date, ${t.structure === 'american' ? 'deal, ' : ''}amount ($m). Fee calls are added automatically from the fee schedule.</p>
+      ${flowRows('calls', state.calls, t.structure === 'american')}
+      <button class="add-btn" data-flow-add="calls">+ Add capital call</button>`,
+    )}
+
+    ${section(
+      'dists',
+      'Distributions',
+      `${state.dists.length} · ${moneyShort(state.dists.reduce((s, d) => s + d.amount, 0))}`,
+      `<p class="hint">Date, ${t.structure === 'american' ? 'deal, ' : ''}amount, and the cost of what was sold ($m). A write-off is 0 with its full cost sold.</p>
+      ${flowRows('dists', state.dists, t.structure === 'american')}
+      <button class="add-btn" data-flow-add="dists">+ Add distribution</button>`,
+    )}
+
+    ${section(
+      'nav',
+      'Remaining value (NAV)',
+      state.nav.amount > 0 ? moneyShort(state.nav.amount) : 'none',
+      `<div class="row">
+        <input type="date" aria-label="NAV date" id="nav-date" value="${state.nav.date}">
+        <input type="number" aria-label="NAV amount" id="nav-amount" min="0" step="1" value="${state.nav.amount}">
+        <span></span>
       </div>
-      <p class="hint">Whole: the whole commitment gets the lower rate. Marginal: only the part above the threshold does, like tax brackets.</p>
-      ${slider('fee-side-cut', 'Side-letter rate cut', f.sideLetterCut, 0, 0.01, 0.00125, 'Applies to LPs set to "Side letter" below.')}
-    </div>
-
-    <h3>Partners <span class="hint">(name, commitment $m, type)</span></h3>
-    <div class="rows">
-      ${state.partners
-        .map(
-          (p, i) => `<div class="row lp">
-            <input type="text" aria-label="Partner name" data-lp-name="${i}" value="${esc(p.id)}">
-            <input type="number" aria-label="Commitment" data-lp-commit="${i}" min="0" step="1" value="${p.commitment}">
-            <select aria-label="Partner type" data-lp-type="${i}">
-              ${PARTNER_TYPES.map(([v, , short]) => `<option value="${v}" ${v === p.type ? 'selected' : ''}>${short}</option>`).join('')}
-            </select>
-            <button class="icon-btn" data-lp-remove="${i}" aria-label="Remove ${esc(p.id)}" ${state.partners.length === 1 ? 'disabled' : ''}>✕</button>
-          </div>`,
-        )
-        .join('')}
-    </div>
-    <button class="add-btn" id="lp-add">+ Add partner</button>
-    <p class="hint">"GP commitment" is the manager investing its own money alongside the LPs. It pays no fees and no carry, and is left out of LP metrics.</p>
-
-    <h3>Investment calls <span class="hint">(date, ${t.structure === 'american' ? 'deal, ' : ''}$m)</span></h3>
-    ${flowRows('calls', state.calls, t.structure === 'american')}
-    <button class="add-btn" data-flow-add="calls">+ Add capital call</button>
-    ${f.enabled ? '<p class="hint">Fee calls are added automatically from the fee schedule.</p>' : ''}
-
-    <h3>Distributions <span class="hint">(date, ${t.structure === 'american' ? 'deal, ' : ''}$m, cost sold $m)</span></h3>
-    ${flowRows('dists', state.dists, t.structure === 'american')}
-    <button class="add-btn" data-flow-add="dists">+ Add distribution</button>
-    <p class="hint">"Cost sold" is what the fund originally paid for the investments it sold. It sets the fee basis after the investment period and, for American waterfalls, how much capital becomes due. A write-off is a distribution of 0 with its full cost sold.</p>
-
-    <h3>Remaining value</h3>
-    <div class="row">
-      <input type="date" aria-label="NAV date" id="nav-date" value="${state.nav.date}">
-      <input type="number" aria-label="NAV amount" id="nav-amount" min="0" step="1" value="${state.nav.amount}">
-      <span></span>
-    </div>
-    <p class="hint">What the fund still holds (NAV). TVPI and IRR use it net of the carry the GP would earn if it were sold (accrued carry). Fees stop on this date. Set it to 0 for a fully realized fund.</p>
+      <p class="hint">What the fund still holds. Shown net of accrued carry in TVPI and IRR; fees stop on this date. 0 = fully realized.</p>`,
+    )}
   `;
+
+  root.querySelectorAll<HTMLDetailsElement>('details[data-section]').forEach((d) =>
+    d.addEventListener('toggle', () => {
+      if (d.open) openSections.add(d.dataset.section!);
+      else openSections.delete(d.dataset.section!);
+    }),
+  );
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
   // Any edit turns the scenario into "Custom". We show it right away without re-rendering
@@ -239,6 +278,25 @@ export function renderInputs(
     });
   }
 }
+
+
+/** Which input sections are open. Kept between re-renders, so adding a row doesn't fold everything. */
+const openSections = new Set<string>(['fees', 'carry']);
+
+/** A collapsible section whose closed state still shows a one-line summary. */
+function section(key: string, title: string, summary: string, body: string): string {
+  return `<details class="input-section" data-section="${key}" ${openSections.has(key) ? 'open' : ''}>
+    <summary><span class="sec-title">${title}</span><span class="sec-summary">${summary}</span></summary>
+    <div class="sec-body">${body}</div>
+  </details>`;
+}
+
+/** Rarely changed options, folded inside a section. */
+function more(key: string, label: string, body: string): string {
+  return `<details class="more" data-section="${key}" ${openSections.has(key) ? 'open' : ''}><summary>${label}</summary>${body}</details>`;
+}
+
+const moneyShort = (x: number) => `$${Math.round(x * 10) / 10}m`;
 
 function slider(id: string, label: string, value: number, min: number, max: number, step: number, hint?: string) {
   return `<div class="field">
