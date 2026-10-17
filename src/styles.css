@@ -348,6 +348,10 @@ a { color: var(--accent-text); }
 .mb-track { height: 18px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
 .mb-bar { height: 100%; border-radius: 4px; transition: width 0.3s ease, margin-left 0.3s ease; }
 .mb-bar.gross { background: var(--tier-roc); }
+.nav-split .mb-track { display: flex; gap: 2px; background: transparent; }
+.nav-split .mb-row { grid-template-columns: 210px 1fr 0; }
+.mb-bar.carry { background: repeating-linear-gradient(45deg, var(--tier-split) 0 3px, color-mix(in srgb, var(--tier-split) 35%, transparent) 3px 6px); }
+.cv-steps { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--grid); }
 .mb-bar.fees { background: repeating-linear-gradient(45deg, var(--tier-pref) 0 3px, color-mix(in srgb, var(--tier-pref) 35%, transparent) 3px 6px); }
 tr.best td { font-weight: 600; }
 .tl-bar { cursor: default; }
@@ -431,6 +435,7 @@ table.tradeoffs td, table.tradeoffs th { white-space: normal; text-align: left; 
   .lesson-list { position: static; max-height: none; }
   .home { padding: 8px 16px 32px; }
   .mb-row { grid-template-columns: 110px 1fr 56px; }
+  .nav-split .mb-row { grid-template-columns: minmax(0, 1fr); gap: 4px; } /* label above the bar */
   .tech { padding: 0 16px 24px; }
   .io-grid { grid-template-columns: 1fr; }
   .site-header { padding: 16px 16px 8px; }

@@ -6,7 +6,9 @@
  * drift from what the numbers actually do.
  */
 
-export type WidgetId = 'timeline' | 'returns' | 'feeRate' | 'stepDown' | 'feeDrag' | 'whoPays';
+export type WidgetId =
+  | 'timeline' | 'returns' | 'feeRate' | 'stepDown' | 'feeDrag' | 'whoPays'
+  | 'carrySplit' | 'hurdle' | 'catchUp' | 'accrued' | 'compounding';
 
 export interface Predict {
   question: string;
@@ -176,12 +178,126 @@ export const LESSONS: Lesson[] = [
     tryThis: 'Turn off the size discount, then raise the side-letter cut. Can the insurer overtake the pension?',
     takeaway: 'Same deals, different fees, different net returns. That’s why each partner’s numbers are calculated separately.',
   },
-  // ---------------------------------------------------------------- Parts 3–5 (coming next)
-  { slug: 'carry-basics', part: 3, title: 'Carry: capital back, then a split', ready: false },
-  { slug: 'the-hurdle', part: 3, title: 'The hurdle (preferred return)', ready: false },
-  { slug: 'the-catch-up', part: 3, title: 'The catch-up', ready: false },
-  { slug: 'accrued-carry', part: 3, title: 'Carry on unsold assets', ready: false },
-  { slug: 'compounding', part: 3, title: 'Compounding conventions (optional)', ready: false },
+  // ---------------------------------------------------------------- Part 3
+  {
+    slug: 'carry-basics',
+    part: 3,
+    title: 'Carry: capital back, then a split',
+    ready: true,
+    intro: [
+      'The GP’s big reward isn’t the fee. It’s <strong>carried interest</strong> ("carry"): a share of the profits, typically 20%. ' +
+        'In a closed-ended fund, carry <em>is</em> the performance fee.',
+      'Carry is paid through a <strong>distribution waterfall</strong>: each distribution flows down a series of tiers, in order. The simplest ' +
+        'version has two. First the LPs get back all the capital they put in (<strong>return of capital</strong>). Whatever is left is profit, ' +
+        'split 80/20 between LPs and GP.',
+      'Management fees are switched off again in this part, so every change you see comes from carry. Part 5 puts everything together.',
+    ],
+    predict: {
+      question: 'The LP put in $85m. Distributions are $20m, $45m, $60m and $50m. With 20% carry, which distribution pays the GP its first carry dollar?',
+      options: ['The first one, $20m in 2023', 'The third one, $60m in 2026', 'Only the last one, at the end of the fund'],
+      answer: 1,
+      explain:
+        'The first two add up to $65m, still short of the $85m the LP put in, so they all go to the LP. The third one finishes returning ' +
+        'capital ($20m), and the remaining $40m is profit, split 80/20.',
+    },
+    widget: 'carrySplit',
+    tryThis: 'Hover the bars to see each tier. Then set the carry rate to 30%: which distributions change, and which don’t?',
+    takeaway: 'Carry is a share of profit, paid only after the LPs have their capital back. The first distributions go entirely to the LPs.',
+  },
+  {
+    slug: 'the-hurdle',
+    part: 3,
+    title: 'The hurdle (preferred return)',
+    ready: true,
+    intro: [
+      'Most funds add a <strong>hurdle</strong>, also called the <strong>preferred return</strong> or "pref": before the GP earns any carry, ' +
+        'the LPs must get their capital back <em>plus</em> a minimum return, typically 8% a year.',
+      'Think of a savings account in the LP’s name that pays 8%. Every capital call is a deposit, every payment to the LP a withdrawal. ' +
+        'Until the account is empty, all the cash goes to the LP. That’s the new middle tier: capital, then pref, then the split.',
+    ],
+    predict: {
+      question: 'Add an 8% hurdle (and nothing else yet). Compared with no hurdle, the GP’s carry is…',
+      options: ['higher', 'lower', 'the same'],
+      answer: 1,
+      explain:
+        'The pref is paid to the LP before anything is split, and the GP gets no carry on it. So the GP takes 20% of a smaller pot, and ends ' +
+        'up with less than 20% of the total profit. The next lesson shows how most funds give it back.',
+    },
+    widget: 'hurdle',
+    tryThis: 'Step through the 2026 distribution. Step 0 shows how much pref the "savings account" has built up by then. Then raise the hurdle to 12%.',
+    takeaway: 'The hurdle protects the LPs’ minimum return: no carry until they have their capital plus, say, 8% a year.',
+  },
+  {
+    slug: 'the-catch-up',
+    part: 3,
+    title: 'The catch-up',
+    ready: true,
+    intro: [
+      'With a hurdle alone, the GP gets 20% of the profit <em>above</em> the hurdle, which is less than 20% of all the profit. Most funds fix ' +
+        'this with a <strong>catch-up</strong>: after the pref, the GP takes most or all of the next dollars until it has caught up to 20% of ' +
+        'everything paid out so far. Then the 80/20 split resumes.',
+      'A 100% ("full") catch-up gives the GP every dollar in that tier. The ILPA model agreement uses 80%: 80 cents of each dollar to the ' +
+        'GP, 20 to the LP. It takes longer, but ends in the same place.',
+    ],
+    predict: {
+      question: 'With an 8% hurdle and a 100% catch-up, if the fund does well, what share of the total profit does the GP end up with?',
+      options: ['Less than 20%', 'Exactly 20%', 'More than 20%'],
+      answer: 1,
+      explain:
+        'The catch-up exists precisely to bring the GP up to its 20%, no more. The hurdle then only <em>delays</em> carry, it doesn’t ' +
+        'reduce it, as long as the fund makes enough to get past the catch-up.',
+    },
+    widget: 'catchUp',
+    tryThis: 'Switch between None and 100% and watch the green catch-up slice appear. Then press Play on the step-through to see the GP catch up.',
+    takeaway: 'The catch-up lets the GP get back to its full carry rate after the pref, so the hurdle changes the timing of carry, not the total.',
+  },
+  {
+    slug: 'accrued-carry',
+    part: 3,
+    title: 'Carry on unsold assets',
+    ready: true,
+    intro: [
+      'Funds don’t sell everything at once. While companies are still held, their value (the NAV) includes profit the GP would take ' +
+        'carry on if they were sold today. That’s <strong>accrued carry</strong>: earned on paper, not yet paid.',
+      'So an LP’s statement shows the NAV <strong>net</strong> of accrued carry: what the LP would actually get if everything were sold ' +
+        'at today’s value. TVPI and IRR use that net figure.',
+    ],
+    predict: {
+      question: 'At the end of 2027 the fund still holds companies worth $40m. On the LP’s statement, its share of that value is…',
+      options: ['$40m, the full value', 'less than $40m', 'nothing until the companies are sold'],
+      answer: 1,
+      explain:
+        'If the companies were sold for $40m, the waterfall would give part of it to the GP as carry. The statement deducts that accrued ' +
+        'carry, so the LP sees less than $40m.',
+    },
+    widget: 'accrued',
+    tryThis: 'Set the NAV to $0: TVPI then equals DPI. Now raise it: how much of each extra $1m of value goes to the GP?',
+    takeaway: 'Unsold value carries a GP share too. LP statements show NAV net of that accrued carry.',
+  },
+  {
+    slug: 'compounding',
+    part: 3,
+    title: 'Compounding conventions (optional)',
+    ready: true,
+    intro: [
+      'The fine print: how does the 8% grow? With <strong>simple</strong> interest, only the capital earns it. With <strong>compound</strong> ' +
+        'interest, unpaid pref earns pref too, so more is owed. Compounding more often (quarterly, daily) adds a little more on top.',
+      'It sounds like a detail, but over years of unpaid pref it moves real money from the GP to the LPs, which is why the LPA wording ' +
+        '("compounded annually") gets negotiated.',
+    ],
+    predict: {
+      question: 'Switch from simple interest to annual compounding. The pref paid to the LP…',
+      options: ['goes up', 'goes down', 'stays the same'],
+      answer: 0,
+      explain:
+        'Once the pref isn’t paid straight away, compounding charges pref on the unpaid pref as well. More pref owed means more paid to ' +
+        'the LP before the split, and (with no catch-up) less carry.',
+    },
+    widget: 'compounding',
+    tryThis: 'Raise the hurdle to 12%. Does the gap between simple and daily grow or shrink? Why?',
+    takeaway: 'Compound pref means more is owed to LPs before carry. "Compounded annually" is the most common wording.',
+  },
+  // ---------------------------------------------------------------- Parts 4–5 (coming next)
   { slug: 'european-vs-american', part: 4, title: 'European vs American', ready: false },
   { slug: 'clawback', part: 4, title: 'Clawback', ready: false },
   { slug: 'gross-to-net', part: 5, title: 'Gross to net', ready: false },

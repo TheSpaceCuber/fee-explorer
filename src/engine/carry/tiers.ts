@@ -125,7 +125,9 @@ export function catchUp(available: number, ledger: PartnerLedger, terms: CarryTe
       `So far the GP has ${pctOf(gpShareNow)} of the ${fmt(profit)} profit paid out, but it is entitled to ${pctOf(c)}. ` +
       `The GP takes ${pctOf(k)} of each dollar here${k < 1 ? ` (the LP gets ${pctOf(1 - k)})` : ''}. ` +
       `It needs ${fmt(target)} to catch up and gets ${fmt(size)}.` +
-      (size < target - 1e-9 ? ' The cash ran out first, so the fund ends in the catch-up zone.' : ` Now the GP has exactly ${pctOf(c)}.`);
+      (size < target - 1e-9
+        ? ' The cash ran out first, so this distribution stops inside the catch-up zone. The next distribution carries on catching up.'
+        : ` Now the GP has exactly ${pctOf(c)}.`);
   }
 
   return {

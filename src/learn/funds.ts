@@ -1,12 +1,12 @@
-import { addMonths, type FeeBasis, type FeeClass, type FundEvent, type FundInput, type Partner, type SizeDiscount } from '../engine';
+import { addMonths, type CarryTerms, type FeeBasis, type FeeClass, type FundEvent, type FundInput, type Partner, type SizeDiscount } from '../engine';
 
 /**
  * "Example Fund I": the one synthetic fund the early lessons share, so you meet the same numbers
  * again and again. $100m committed; $85m invested in four deals over 2020–22; four exits over
  * 2023–27; $10m of value still held at the end of 2027.
  *
- * Parts 1–2 switch carry off on purpose: the lessons are about cash flows and management fees,
- * and carry arrives in Part 3.
+ * Parts 1–2 switch carry off on purpose: the lessons are about cash flows and management fees.
+ * Part 3 switches carry on (via `carry`) and fees off, so each part teaches one thing.
  */
 
 export const FUND_NAME = 'Example Fund I';
@@ -42,7 +42,14 @@ export interface FundOptions {
   feeClasses?: Record<string, FeeClass>;
   /** Size discount applied to the standard class. */
   sizeDiscount?: SizeDiscount;
+  /** Carry terms (default: no carry). E.g. { carryRate: 0.2, hurdleRate: 0.08, catchUpRate: 1 }. */
+  carry?: Partial<CarryTerms>;
+  /** Value still held at the end (default $10m). */
+  navAmount?: number;
 }
+
+/** No carry: what Parts 1–2 use. */
+const NO_CARRY: CarryTerms = { structure: 'european', hurdleRate: 0, compounding: 'annual', catchUpRate: 0, carryRate: 0 };
 
 export const DEFAULT_LP: Partner = { id: 'Pension LP', role: 'LP', commitment: 100, feeClassId: 'standard' };
 
@@ -73,10 +80,10 @@ export function exampleFund(o: FundOptions = {}): FundInput {
     return rest;
   });
   return {
-    terms: { structure: 'european', hurdleRate: 0.08, compounding: 'annual', catchUpRate: 0, carryRate: 0 },
+    terms: { ...NO_CARRY, ...(o.carry ?? {}) },
     partners,
     events,
-    nav: { date: shift(NAV.date), amount: NAV.amount },
+    nav: { date: shift(NAV.date), amount: o.navAmount ?? NAV.amount },
     ...(fees ? { fees: { start: '2020-01-01', classes: { standard: standardFeeClass(o), ...(o.feeClasses ?? {}) } } } : {}),
   };
 }

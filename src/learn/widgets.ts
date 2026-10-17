@@ -1,4 +1,4 @@
-import { computeMetrics, runFund, xirr, partnersCashFlows, type FundInput, type Partner } from '../engine';
+import { computeMetrics, runFund, xirr, partnersCashFlows, type Partner } from '../engine';
 import { dayNumber } from '../engine/daycount';
 import { niceTicks } from '../ui/business/chart';
 import { renderFeeChart } from '../ui/business/fees';
@@ -7,49 +7,9 @@ import { hideTooltip, showTooltipHtml } from '../ui/tooltip';
 import { exampleFund, standardFeeClass } from './funds';
 import type { WidgetId } from './lessons';
 
-/**
- * The small interactives inside lessons. Each one:
- *   - keeps its own parameters (the few controls the lesson needs),
- *   - turns them into a fund with `input(params)` (also used by tests and "Open in Explore"),
- *   - draws itself with `render`, calling `set` when a control changes.
- * All numbers come from the engine. A widget never calculates money itself.
- */
-export interface Widget<P> {
-  init: () => P;
-  input: (p: P) => FundInput;
-  render: (root: HTMLElement, p: P, set: (p: P) => void) => void;
-}
-
-// ------------------------------------------------------------------ shared bits
-
-const slider = (id: string, label: string, value: number, min: number, max: number, step: number, shown: string) => `
-  <div class="field">
-    <label for="${id}">${label} <span class="value">${shown}</span></label>
-    <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}">
-  </div>`;
-
-const segmented = (name: string, label: string, options: [string, string][], current: string) => `
-  <div class="field" role="radiogroup" aria-label="${label}">
-    <span class="label">${label}</span>
-    <div class="segmented">${options
-      .map(([v, t]) => `<label><input type="radio" name="${name}" value="${v}" ${v === current ? 'checked' : ''}>${t}</label>`)
-      .join('')}</div>
-  </div>`;
-
-const onInput = (root: HTMLElement, id: string, f: (v: number) => void) =>
-  root.querySelector<HTMLInputElement>(`#${id}`)!.addEventListener('input', (e) => f(Number((e.target as HTMLInputElement).value)));
-const onRadio = (root: HTMLElement, name: string, f: (v: string) => void) =>
-  root.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((r) => r.addEventListener('change', () => f(r.value)));
-
-const stat = (label: string, value: string, note = '') =>
-  `<div class="tile"><div class="t-label">${label}</div><div class="t-value">${value}</div>${note ? `<div class="t-note">${note}</div>` : ''}</div>`;
-
-/** Keep focus on the control being dragged when the widget re-renders. */
-function keepFocus(root: HTMLElement, draw: () => void) {
-  const id = (document.activeElement as HTMLElement | null)?.id;
-  draw();
-  if (id) root.querySelector<HTMLElement>(`#${id}`)?.focus();
-}
+/** Lessons 1–6 (basics and management fees). Lessons 7–11 (carry) are in widgets-carry.ts. */
+import { keepFocus, onInput, onRadio, segmented, slider, stat, type Widget } from './widget-kit';
+import { CARRY_WIDGETS } from './widgets-carry';
 
 // ------------------------------------------------------------------ 1. timeline
 
@@ -336,4 +296,4 @@ const whoPays: Widget<WhoPaysP> = {
 // ------------------------------------------------------------------ registry
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const WIDGETS: Record<WidgetId, Widget<any>> = { timeline, returns, feeRate, stepDown, feeDrag, whoPays };
+export const WIDGETS: Record<WidgetId, Widget<any>> = { timeline, returns, feeRate, stepDown, feeDrag, whoPays, ...CARRY_WIDGETS };

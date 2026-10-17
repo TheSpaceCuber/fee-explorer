@@ -89,3 +89,54 @@ describe('predict answers agree with the engine', () => {
     expect(answerOf('who-pays-what')).toBe(2); // "The GP's own commitment"
   });
 });
+
+describe('Part 3 (carry): predict answers and text claims agree with the engine', () => {
+  const alloc = (input: FundInput, eventId: string, tier: string) => runFund(input).allocations.find((a) => a.eventId === eventId && a.tier === tier)!;
+
+  it('7 carry basics: the first carry dollar comes in the third distribution, as the text works out', () => {
+    const input = WIDGETS.carrySplit.input(WIDGETS.carrySplit.init());
+    const r = runFund(input);
+    const withCarry = input.events.filter((e) => e.kind === 'distribution' && r.allocations.some((a) => a.eventId === e.id && a.gp > 1e-9));
+    expect(withCarry[0]!.id).toBe('dist-3');
+    // "The third one finishes returning capital ($20m), and the remaining $40m is profit, split 80/20."
+    expect(alloc(input, 'dist-3', 'ROC').lp).toBeCloseTo(20, 9);
+    const split = alloc(input, 'dist-3', 'SPLIT');
+    expect(split.lp + split.gp).toBeCloseTo(40, 9);
+    expect(split.gp).toBeCloseTo(8, 9);
+    expect(answerOf('carry-basics')).toBe(1);
+  });
+
+  it('8 the hurdle: adding an 8% hurdle (no catch-up) lowers the GP carry and its share below 20%', () => {
+    const w = WIDGETS.hurdle;
+    const carry = (h: number) => runFund(w.input({ ...w.init(), hurdle: h })).allocations.reduce((s, a) => s + a.gp, 0);
+    expect(carry(0.08)).toBeLessThan(carry(0));
+    expect(metrics(w.input(w.init())).gpShareOfProfit!).toBeLessThan(0.2);
+    expect(answerOf('the-hurdle')).toBe(1);
+  });
+
+  it('9 the catch-up: with a full (or 80%) catch-up the GP ends at exactly 20% of profit', () => {
+    const w = WIDGETS.catchUp;
+    expect(metrics(w.input({ ...w.init(), catchUp: 1 })).gpShareOfProfit!).toBeCloseTo(0.2, 9);
+    expect(metrics(w.input({ ...w.init(), catchUp: 0.8 })).gpShareOfProfit!).toBeCloseTo(0.2, 9); // "ends in the same place"
+    expect(metrics(w.input({ ...w.init(), catchUp: 0 })).gpShareOfProfit!).toBeLessThan(0.2);
+    expect(answerOf('the-catch-up')).toBe(1);
+  });
+
+  it('10 accrued carry: $40m of NAV shows as less on the LP statement, and each extra $1m gives the GP 20 cents', () => {
+    const w = WIDGETS.accrued;
+    const at = (nav: number) => metrics(w.input({ nav }));
+    expect(at(40).netNav).toBeLessThan(40);
+    expect(at(45).accruedCarry - at(40).accruedCarry).toBeCloseTo(1, 9); // $5m more NAV → $1m more accrued carry
+    expect(at(0).tvpi).toBeCloseTo(at(0).dpi!, 12); // "Set the NAV to $0: TVPI then equals DPI"
+    expect(answerOf('accrued-carry')).toBe(1);
+  });
+
+  it('11 compounding: annual compounding pays the LP more pref than simple interest', () => {
+    const w = WIDGETS.compounding;
+    const pref = (conv: string) =>
+      runFund(w.input({ conv, hurdle: 0.08 })).allocations.filter((a) => a.tier === 'PREF').reduce((s, a) => s + a.lp, 0);
+    expect(pref('annual')).toBeGreaterThan(pref('simple'));
+    expect(pref('daily')).toBeGreaterThan(pref('annual'));
+    expect(answerOf('compounding')).toBe(0);
+  });
+});
