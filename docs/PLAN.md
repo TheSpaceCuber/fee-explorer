@@ -163,3 +163,57 @@ Each milestone ends with a git commit, tests passing, and an updated `concepts.m
 - Accessibility: WCAG AA text contrast in light and dark, keyboard access for every control
   (ARIA tabs pattern, clickable rows), skip link, reduced motion, table views for every chart.
 - Deployment: GitHub Actions workflow builds, tests and publishes to GitHub Pages.
+
+---
+
+# Part B: Fee Explorer, a learning redesign (v4)
+
+The site works, but it shows everything at once (20+ controls, ~10 panels, two tabs) with no
+starting point, and the concepts appear out of order. Part B turns it into **Fee Explorer**: a
+guided course first, with the full playground and the systems view one click away. It's live at
+https://royceho.com/fee-explorer/ (deployed by the author).
+
+## Decisions (agreed 2026-10-17)
+
+- **Name:** Fee Explorer, because it covers management fees and performance fees (carry), not
+  only the waterfall.
+- **Lesson format:** one idea per screen. Short text, one small interactive (1–3 controls on a
+  fixed example fund), a "try this" prompt, a takeaway, Back/Next.
+- **Self-checks:** "predict, then check". A one-line question before you touch the control,
+  revealed after. No scores.
+- **Navigation:** a landing page with three doors (**Learn / Explore / Under the hood**), all
+  reachable from the header at any time.
+- **Build order:** rename + shell + Parts 1–2 first, then a review before the carry lessons.
+
+## Lesson path
+
+| Part | Lessons |
+|---|---|
+| 1. Basics | 1 Who's who: LP, GP, commitment, calls, distributions · 2 Measuring returns: DPI, TVPI, IRR |
+| 2. Management fees | 3 The fee: % of commitments, quarterly · 4 The step-down to invested capital · 5 Paid by capital calls: returned first, drag on IRR · 6 Different LPs, different fees (size discounts, side letters, GP commitment) |
+| 3. Performance fees (carry) | 7 Capital back, then 80/20 · 8 The hurdle · 9 The catch-up · 10 Accrued carry on unsold assets · 11 (optional) Compounding |
+| 4. Fund structures | 12 European vs American · 13 Clawback |
+| 5. Putting it together | 14 Gross to net · 15 Net to gross, with public data |
+
+## Design
+
+- **Routing:** hash routes so it works on any static host and sub-path:
+  `#/` landing, `#/learn/<lesson>`, `#/explore`, `#/under-the-hood`. Every lesson has its own link.
+- **Lessons are data** (`src/learn/lessons.ts`): part, title, text, which widget, which example fund,
+  the predict question and its answer, try-this, takeaway. A lesson shell renders them: a sidebar
+  with parts and ✓ progress (saved in the browser, and the page still works if storage is blocked),
+  the lesson body, Back/Next, and "Open this fund in Explore".
+- **Widgets** are small, focused views built on the existing engine and charts (timeline, metrics,
+  fee chart, bridge, step-through, partner table), each showing only the controls the lesson needs.
+- **Predict answers are checked by tests.** Every "predict, then check" answer is computed by the
+  engine in a test, so a lesson can never claim something the engine disagrees with.
+- **Explore** = today's Tab 1, unchanged in B1, decluttered in B3. **Under the hood** = today's Tab 2.
+
+## Milestones
+
+| # | Scope | Done when |
+|---|---|---|
+| **B1** | Rename to Fee Explorer. Landing page, hash routing, lesson shell with progress. Parts 1–2 (lessons 1–6) with their widgets and predict checks. | Lessons 1–6 work at phone and desktop width; every predict answer passes its engine test; **user review**. |
+| **B2** | Part 3: carry lessons 7–11, reusing the step-through as a widget. | Same checks. |
+| **B3** | Parts 4–5. Explore declutter: inputs in collapsible sections, advanced options hidden by default, "learn about this" links from panels to lessons. | Same checks. |
+| **B4** | Polish: copy edit across lessons, accessibility re-check, visual design pass (with the frontend-design skill if it's available). | |
