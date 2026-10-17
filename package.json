@@ -1,9 +1,9 @@
 {
-  "name": "pe-fund-economics-explorer",
+  "name": "fee-explorer",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Learning tool: visualize PE management fees, carried interest waterfalls and performance fees.",
+  "description": "Fee Explorer: learn how private equity funds charge management fees and carried interest, one idea at a time.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

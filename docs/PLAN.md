@@ -1,4 +1,4 @@
-# Fund Economics Explorer: Plan (v3)
+# Fee Explorer: Plan
 
 A static learning site that shows how money moves between investors (LPs) and the manager (GP) in a
 **closed-ended private equity fund**. It covers **management fees** and **carried interest**
@@ -213,7 +213,7 @@ https://royceho.com/fee-explorer/ (deployed by the author).
 
 | # | Scope | Done when |
 |---|---|---|
-| **B1** | Rename to Fee Explorer. Landing page, hash routing, lesson shell with progress. Parts 1–2 (lessons 1–6) with their widgets and predict checks. | Lessons 1–6 work at phone and desktop width; every predict answer passes its engine test; **user review**. |
+| **B1** ✅ | Rename to Fee Explorer. Landing page, hash routing, lesson shell with progress. Parts 1–2 (lessons 1–6) with their widgets and predict checks. | Lessons 1–6 work at phone and desktop width; every predict answer passes its engine test; **user review**. |
 | **B2** | Part 3: carry lessons 7–11, reusing the step-through as a widget. | Same checks. |
 | **B3** | Parts 4–5. Explore declutter: inputs in collapsible sections, advanced options hidden by default, "learn about this" links from panels to lessons. | Same checks. |
 | **B4** | Polish: copy edit across lessons, accessibility re-check, visual design pass (with the frontend-design skill if it's available). | |

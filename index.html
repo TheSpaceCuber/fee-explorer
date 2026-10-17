@@ -3,23 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Waterfall Explorer</title>
-    <meta name="description" content="Learn how private equity fees and distribution waterfalls work. All data is synthetic." />
+    <title>Fee Explorer</title>
+    <meta name="description" content="Learn how private equity funds charge management fees and carried interest, one idea at a time. Interactive, all data synthetic or from public sources." />
   </head>
   <body>
-    <a class="skip-link" href="#view-business">Skip to content</a>
+    <button class="skip-link" id="skip-link" type="button">Skip to content</button>
     <header class="site-header">
-      <div>
-        <h1>Waterfall Explorer</h1>
-        <p class="subtitle">How a fund's distributions are split between investors (LPs) and the manager (GP). Synthetic data, $ millions.</p>
-      </div>
-      <nav class="tabs" role="tablist" aria-label="Views">
-        <button role="tab" aria-selected="true" aria-controls="view-business" id="tab-business" tabindex="0">How the waterfall works</button>
-        <button role="tab" aria-selected="false" aria-controls="view-technical" id="tab-technical" tabindex="-1">How it's calculated and stored</button>
+      <a class="brand" href="#/">
+        <span class="brand-name">Fee Explorer</span>
+        <span class="subtitle">How private equity funds charge fees, one idea at a time</span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="#/learn" data-nav="learn">Learn</a>
+        <a href="#/explore" data-nav="explore">Explore</a>
+        <a href="#/under-the-hood" data-nav="hood">Under the hood</a>
       </nav>
     </header>
 
-    <main class="layout" id="view-business" role="tabpanel" aria-labelledby="tab-business" tabindex="-1">
+    <main class="home" id="view-home" tabindex="-1" hidden></main>
+
+    <main class="learn" id="view-learn" tabindex="-1" hidden></main>
+
+    <main class="layout" id="view-business" tabindex="-1" hidden>
+      <h1 class="visually-hidden">Explore</h1>
       <aside class="panel inputs" id="inputs" aria-label="Fund inputs"></aside>
 
       <section class="outputs">
@@ -71,7 +77,7 @@
       </section>
     </main>
 
-    <main class="tech" id="view-technical" role="tabpanel" aria-labelledby="tab-technical" tabindex="-1" hidden></main>
+    <main class="tech" id="view-technical" tabindex="-1" hidden></main>
 
     <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
     <script type="module" src="/src/ui/main.ts"></script>

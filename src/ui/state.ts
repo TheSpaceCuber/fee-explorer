@@ -53,6 +53,8 @@ export interface FeeUi {
 
 export interface UiState {
   presetId: string;
+  /** Where these inputs came from, when not a listed preset (e.g. "Loaded from Lesson 6"). */
+  note?: string;
   terms: CarryTerms;
   partners: UiPartner[];
   calls: Flow[];
@@ -72,6 +74,7 @@ export function fromPreset(p: Preset): UiState {
   const { input } = p;
   return {
     presetId: p.id,
+    note: p.blurb,
     terms: { ...input.terms },
     partners: input.partners.map((x) => ({ id: x.id, commitment: x.commitment, type: partnerType(x) })),
     calls: input.events

@@ -1,37 +1,49 @@
 import '../styles.css';
 import { computeMetrics, runFund, validate, type EventTrace, type FundInput, type WaterfallResult } from '../engine';
+import { renderHome } from '../learn/home';
+import { renderLearn } from '../learn/shell';
+import { lessonBySlug } from '../learn/lessons';
 import { PRESETS } from '../scenarios/presets';
-import { piecesFor, renderChart, TIER_STYLE, type Piece } from './business/chart';
-import { renderInputs } from './business/inputs';
 import { renderBridge } from './business/bridge';
+import { piecesFor, renderChart, TIER_STYLE, type Piece } from './business/chart';
 import { renderComparison } from './business/comparison';
-import { renderNetToGross } from './business/netgross';
 import { renderFeeChart, renderFeeTable } from './business/fees';
+import { renderInputs } from './business/inputs';
+import { renderNetToGross } from './business/netgross';
 import { renderAllocTable, renderLegend, renderLpTable, renderTiles } from './business/panels';
 import { LAST_STEP, renderStepThrough } from './business/stepthrough';
 import { money, shortDate } from './format';
+import { parseRoute, type Route } from './router';
 import { fromPreset, toFundInput, type UiState } from './state';
 import { createTechnicalView } from './technical/technical';
+import { hideTooltip, showTooltipHtml } from './tooltip';
 
 /**
- * App entry point. The flow is one direction only:
+ * App entry point. Four views, picked by the URL hash (see router.ts):
+ *   #/                home: what this is, three ways in
+ *   #/learn/<lesson>  the course
+ *   #/explore         the full playground
+ *   #/under-the-hood  the calculation pipeline
  *
- *   UI state ──toFundInput──▶ engine (pure) ──▶ result ──▶ render functions ──▶ DOM
- *
- * The UI never calculates anything financial itself. It only reshapes inputs and displays outputs.
+ * In every view the flow is one direction only:
+ *   UI state ──▶ engine (pure) ──▶ result ──▶ render functions ──▶ DOM
+ * The UI never calculates anything financial itself.
  */
 
 const el = (id: string) => document.getElementById(id)!;
 let state: UiState = fromPreset(PRESETS[0]!);
 /** The calibrated preset the current inputs came from (stays set after edits, so the panel can compare). */
 let calibratedFrom: string | null = null;
+let route: Route = parseRoute(location.hash);
 
-// Tab 2 keeps its own run history. A new preset is a different fund, so the history starts over.
+// "Under the hood" keeps its own run history. A different fund starts the history over.
 const technical = createTechnicalView(
   el('view-technical'),
   () => toFundInput(state),
   () => PRESETS.find((p) => p.id === state.presetId)?.name ?? 'your custom fund',
 );
+
+// ------------------------------------------------------------------ Explore
 
 function mountInputs() {
   renderInputs(el('inputs'), state, update, (next) => {
@@ -54,7 +66,7 @@ function update() {
   const errors = el('errors');
   if (issues.length > 0) {
     errors.hidden = false;
-    errors.innerHTML = `<strong>Can't run the waterfall:</strong><ul>${issues.map((i) => `<li><code>${i.field}</code>: ${i.message}</li>`).join('')}</ul>`;
+    errors.innerHTML = `<strong>Can't run the fund:</strong><ul>${issues.map((i) => `<li><code>${i.field}</code>: ${i.message}</li>`).join('')}</ul>`;
     return;
   }
   errors.hidden = true;
@@ -72,7 +84,7 @@ function update() {
   renderTiles(el('tiles'), metrics, state);
   renderChart(el('chart'), state.dists, result, state.selectedDist, {
     onSelect: selectDistribution,
-    onHover: (e, id, piece) => showTooltip(e, id, piece, result),
+    onHover: (e, id, piece) => showDistributionTooltip(e, id, piece, result),
     onLeave: hideTooltip,
   });
   renderAllocTable(el('alloc-table'), state.dists, result);
@@ -108,7 +120,7 @@ function selectDistribution(id: string) {
   el('trace').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// --- Play: advance one step every 1.6 seconds ---
+// Play: advance one step every 1.6 seconds.
 let playTimer: number | null = null;
 function togglePlay() {
   if (playTimer !== null) return stopPlaying(), update();
@@ -125,9 +137,7 @@ function stopPlaying() {
   playTimer = null;
 }
 
-// --- Tooltip ---
-const tooltip = el('tooltip');
-function showTooltip(e: MouseEvent, id: string, hovered: Piece | null, result: WaterfallResult) {
+function showDistributionTooltip(e: MouseEvent, id: string, hovered: Piece | null, result: WaterfallResult) {
   const d = state.dists.find((x) => x.id === id);
   if (!d) return;
   const rows = piecesFor(result.allocations, id)
@@ -139,31 +149,16 @@ function showTooltip(e: MouseEvent, id: string, hovered: Piece | null, result: W
         <span>${swatch} ${TIER_STYLE[p.tier].label} → ${p.who}</span><span>${money(p.amount, 2)}</span></div>`;
     })
     .join('');
-  tooltip.innerHTML = `<div class="tt-title">${shortDate(d.date)} distribution · ${money(d.amount, 2)}</div>${rows || '<div class="tt-row">Nothing distributed</div>'}<div class="tt-hint">Click to step through it</div>`;
-  placeTooltip(e);
-}
-function placeTooltip(e: MouseEvent) {
-  tooltip.hidden = false;
-  // Keep the tooltip on screen: flip to the left of the cursor near the right edge.
-  const pad = 14;
-  const { width, height } = tooltip.getBoundingClientRect();
-  const left = e.clientX + pad + width > window.innerWidth ? e.clientX - pad - width : e.clientX + pad;
-  const top = Math.min(e.clientY + pad, window.innerHeight - height - 8);
-  tooltip.style.left = `${Math.max(8, left)}px`;
-  tooltip.style.top = `${top}px`;
-}
-function showTooltipHtml(e: MouseEvent, html: string) {
-  tooltip.innerHTML = html;
-  placeTooltip(e);
-}
-function hideTooltip() {
-  tooltip.hidden = true;
+  showTooltipHtml(
+    e,
+    `<div class="tt-title">${shortDate(d.date)} distribution · ${money(d.amount, 2)}</div>${rows || '<div class="tt-row">Nothing distributed</div>'}<div class="tt-hint">Click to step through it</div>`,
+  );
 }
 
-// Keyboard: ← / → step through when Tab 1 is showing and focus isn't in a form field or on the tabs.
+// Keyboard: ← / → step through, only in Explore and not while typing in a field.
 document.addEventListener('keydown', (e) => {
   const target = e.target as HTMLElement;
-  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.getAttribute('role') === 'tab') return;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
   if (el('view-business').hidden) return;
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
     stopPlaying();
@@ -172,44 +167,75 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// --- Tabs ---
-function showTab(which: 'business' | 'technical') {
-  el('tab-business').setAttribute('aria-selected', String(which === 'business'));
-  el('tab-technical').setAttribute('aria-selected', String(which === 'technical'));
-  // ARIA tabs pattern: only the selected tab is in the Tab order; arrow keys move between tabs.
-  el('tab-business').tabIndex = which === 'business' ? 0 : -1;
-  el('tab-technical').tabIndex = which === 'technical' ? 0 : -1;
-  document.querySelector<HTMLAnchorElement>('.skip-link')!.href = `#view-${which}`;
-  el('view-business').hidden = which !== 'business';
-  el('view-technical').hidden = which !== 'technical';
+// ------------------------------------------------------------------ Routing
+
+const VIEW_IDS: Record<Route['view'], string> = { home: 'view-home', learn: 'view-learn', explore: 'view-business', hood: 'view-technical' };
+const TITLES: Record<Route['view'], string> = { home: 'Fee Explorer', learn: 'Learn', explore: 'Explore', hood: 'Under the hood' };
+
+function show(next: Route, { focus = true } = {}) {
+  const leavingExplore = route.view === 'explore' && next.view !== 'explore';
+  route = next;
+  if (leavingExplore) stopPlaying();
   hideTooltip();
-  if (which === 'technical') {
-    stopPlaying();
-    // Only show Tab 2 when Tab 1's inputs are valid: the pipeline would reject them anyway.
-    if (validate(toFundInput(state)).length > 0) {
-      el('view-technical').innerHTML = '<section class="panel"><p>Tab 1 has validation errors. Fix them there first, then come back.</p></section>';
-    } else technical.show();
-  } else update();
-}
-el('tab-business').addEventListener('click', () => showTab('business'));
-el('tab-technical').addEventListener('click', () => showTab('technical'));
-for (const id of ['tab-business', 'tab-technical']) {
-  el(id).addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
-    e.preventDefault();
-    e.stopPropagation(); // don't also step the step-through
-    const next = id === 'tab-business' ? 'technical' : 'business';
-    const target = e.key === 'Home' ? 'business' : e.key === 'End' ? 'technical' : next;
-    showTab(target);
-    el(`tab-${target}`).focus();
+
+  for (const [view, id] of Object.entries(VIEW_IDS)) el(id).hidden = view !== next.view;
+  document.querySelectorAll<HTMLAnchorElement>('[data-nav]').forEach((a) => {
+    if (a.dataset.nav === next.view) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
   });
+
+  switch (next.view) {
+    case 'home':
+      renderHome(el('view-home'));
+      break;
+    case 'learn':
+      renderLearn(el('view-learn'), next.lesson, { openInExplore });
+      break;
+    case 'explore':
+      update();
+      break;
+    case 'hood':
+      // The pipeline would reject invalid inputs anyway, so say so up front.
+      if (validate(toFundInput(state)).length > 0) {
+        el('view-technical').innerHTML = '<section class="panel"><p>The fund in Explore has validation errors. Fix them there first, then come back.</p></section>';
+      } else technical.show();
+      break;
+  }
+
+  const lesson = next.view === 'learn' && next.lesson ? lessonBySlug(next.lesson) : null;
+  document.title = next.view === 'home' ? 'Fee Explorer' : `${lesson ? lesson.title : TITLES[next.view]} · Fee Explorer`;
+
+  if (focus) {
+    // Like a page load: start at the top, and move keyboard/screen-reader focus to the new content.
+    window.scrollTo(0, 0);
+    const target = el(VIEW_IDS[next.view]).querySelector<HTMLElement>('#lesson-title') ?? el(VIEW_IDS[next.view]);
+    target.focus({ preventScroll: true });
+  }
 }
+
+/** "Open this fund in Explore" from a lesson. */
+function openInExplore(input: FundInput, name: string) {
+  state = fromPreset({ id: 'from-lesson', name, blurb: `Loaded from ${name}. Everything is editable here, and the lesson keeps its own copy.`, input });
+  calibratedFrom = null;
+  technical.reset();
+  stopPlaying();
+  mountInputs();
+  location.hash = '#/explore';
+}
+
+window.addEventListener('hashchange', () => show(parseRoute(location.hash)));
+
+el('skip-link').addEventListener('click', () => {
+  const main = el(VIEW_IDS[route.view]);
+  main.focus();
+  main.scrollIntoView();
+});
 
 renderLegend(el('legend'));
 mountInputs();
-update();
+show(route, { focus: false });
 
-// The chart is drawn at its container's pixel width, so redraw when that changes.
+// Charts are drawn at their container's pixel width, so redraw the visible view when that changes.
 // requestAnimationFrame groups a burst of resize events into one redraw per frame.
 let resizeQueued = false;
 window.addEventListener('resize', () => {
@@ -217,6 +243,7 @@ window.addEventListener('resize', () => {
   resizeQueued = true;
   requestAnimationFrame(() => {
     resizeQueued = false;
-    update();
+    if (route.view === 'explore') update();
+    if (route.view === 'learn') show(route, { focus: false });
   });
 });

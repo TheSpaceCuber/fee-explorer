@@ -27,9 +27,9 @@ export function renderInputs(
       <label for="preset">Scenario</label>
       <select id="preset">
         ${PRESETS.map((p) => `<option value="${p.id}" ${p.id === state.presetId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-        ${preset ? '' : '<option value="custom" selected>Custom</option>'}
+        ${preset ? '' : `<option value="custom" selected>${state.presetId === 'custom' ? 'Custom' : 'From a lesson'}</option>`}
       </select>
-      <p class="hint">${preset ? esc(preset.blurb) : 'You have edited the scenario.'}</p>
+      <p class="hint">${preset ? esc(preset.blurb) : state.presetId === 'custom' ? 'You have edited the scenario.' : esc(state.note ?? '')}</p>
     </div>
 
     <h3>Carry terms</h3>

@@ -1,7 +1,10 @@
 /** Display helpers. Only the UI rounds numbers. The engine keeps full precision. */
 
-export const money = (x: number, digits = 1) =>
-  `$${x.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}m`;
+export const money = (x: number, digits = 1) => {
+  const text = Math.abs(x).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  // Sign before the currency (−$85.0m, not $-85.0m), and no sign on a rounded zero.
+  return `${x < 0 && Number(text.replace(/,/g, '')) !== 0 ? '−' : ''}$${text}m`;
+};
 
 export const pct = (x: number | null, digits = 1) => {
   if (x === null || !Number.isFinite(x)) return '—';
