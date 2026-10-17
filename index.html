@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Waterfall Explorer</title>
+    <meta name="description" content="Learn how private equity fees and distribution waterfalls work. All data is synthetic." />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>Waterfall Explorer</h1>
+        <p class="subtitle">How a fund's distributions are split between investors (LPs) and the manager (GP). Synthetic data, $ millions.</p>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button role="tab" aria-selected="true" id="tab-business">How the waterfall works</button>
+        <button role="tab" aria-selected="false" disabled title="Arrives in Milestone 7">How it's calculated and stored</button>
+      </nav>
+    </header>
+
+    <main class="layout" role="tabpanel" aria-labelledby="tab-business">
+      <aside class="panel inputs" id="inputs" aria-label="Fund inputs"></aside>
+
+      <section class="outputs">
+        <div id="errors" class="errors" role="alert" hidden></div>
+        <div id="tiles" class="tiles"></div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Where each distribution went</h2>
+            <div id="legend" class="legend"></div>
+          </div>
+          <div id="chart" class="chart"></div>
+          <details class="table-view">
+            <summary>Show as table</summary>
+            <div id="alloc-table"></div>
+          </details>
+        </section>
+
+        <section class="panel" id="trace"></section>
+
+        <section class="panel">
+          <h2>By LP</h2>
+          <div id="lp-table"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+    <script type="module" src="/src/ui/main.ts"></script>
+  </body>
+</html>

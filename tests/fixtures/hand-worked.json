@@ -1,0 +1,197 @@
+{
+  "description": "Hand-worked waterfall cases. See hand-worked.md for the arithmetic. Language-neutral: any engine (TS, Python) should reproduce these. Allocations are fund-level sums; tiers not listed are expected to be 0. Tolerance 1e-9 unless stated.",
+  "defaults": {
+    "terms": {
+      "structure": "european",
+      "hurdleRate": 0.10,
+      "compounding": "annual",
+      "catchUpRate": 0,
+      "carryRate": 0.20
+    },
+    "partners": [{ "id": "LP-A", "role": "LP", "commitment": 100 }]
+  },
+  "cases": [
+    {
+      "id": "A1",
+      "title": "One contribution, one distribution, above the hurdle",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2026-01-01", "amount": 150 }
+      ],
+      "expected": {
+        "allocations": [
+          { "eventId": "d1", "tier": "ROC", "lp": 100, "gp": 0 },
+          { "eventId": "d1", "tier": "PREF", "lp": 10, "gp": 0 },
+          { "eventId": "d1", "tier": "SPLIT", "lp": 32, "gp": 8 }
+        ],
+        "totals": { "lp": 142, "gp": 8 },
+        "endState": { "capitalOutstanding": 0, "prefAccrued": 0 },
+        "metrics": { "paidIn": 100, "dpi": 1.42, "tvpi": 1.42, "irr": 0.42 }
+      }
+    },
+    {
+      "id": "A2",
+      "title": "Distribution below capital",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2026-01-01", "amount": 80 }
+      ],
+      "expected": {
+        "allocations": [{ "eventId": "d1", "tier": "ROC", "lp": 80, "gp": 0 }],
+        "totals": { "lp": 80, "gp": 0 },
+        "endState": { "capitalOutstanding": 20, "prefAccrued": 10 },
+        "metrics": { "paidIn": 100, "dpi": 0.8, "tvpi": 0.8, "irr": -0.2 }
+      }
+    },
+    {
+      "id": "A3",
+      "title": "Distribution covers capital and part of the pref",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2026-01-01", "amount": 105 }
+      ],
+      "expected": {
+        "allocations": [
+          { "eventId": "d1", "tier": "ROC", "lp": 100, "gp": 0 },
+          { "eventId": "d1", "tier": "PREF", "lp": 5, "gp": 0 }
+        ],
+        "totals": { "lp": 105, "gp": 0 },
+        "endState": { "capitalOutstanding": 0, "prefAccrued": 5 },
+        "metrics": { "paidIn": 100, "dpi": 1.05, "tvpi": 1.05, "irr": 0.05 }
+      }
+    },
+    {
+      "id": "A4",
+      "title": "Distribution lands exactly on the hurdle",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2026-01-01", "amount": 110 }
+      ],
+      "expected": {
+        "allocations": [
+          { "eventId": "d1", "tier": "ROC", "lp": 100, "gp": 0 },
+          { "eventId": "d1", "tier": "PREF", "lp": 10, "gp": 0 }
+        ],
+        "totals": { "lp": 110, "gp": 0 },
+        "endState": { "capitalOutstanding": 0, "prefAccrued": 0 },
+        "metrics": { "paidIn": 100, "dpi": 1.1, "tvpi": 1.1, "irr": 0.1 }
+      }
+    },
+    {
+      "id": "A5",
+      "title": "Two distributions; unpaid pref carries forward and compounds",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2026-01-01", "amount": 60 },
+        { "id": "d2", "kind": "distribution", "date": "2027-01-01", "amount": 100 }
+      ],
+      "expected": {
+        "allocations": [
+          { "eventId": "d1", "tier": "ROC", "lp": 60, "gp": 0 },
+          { "eventId": "d2", "tier": "ROC", "lp": 40, "gp": 0 },
+          { "eventId": "d2", "tier": "PREF", "lp": 15, "gp": 0 },
+          { "eventId": "d2", "tier": "SPLIT", "lp": 36, "gp": 9 }
+        ],
+        "totals": { "lp": 151, "gp": 9 },
+        "endState": { "capitalOutstanding": 0, "prefAccrued": 0 },
+        "metrics": { "paidIn": 100, "dpi": 1.51, "tvpi": 1.51, "irr": 0.3 }
+      }
+    },
+    {
+      "id": "A6",
+      "title": "Two contributions",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 50, "fee": 0 },
+        { "id": "c2", "kind": "capital_call", "date": "2026-01-01", "investment": 50, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2027-01-01", "amount": 165 }
+      ],
+      "expected": {
+        "allocations": [
+          { "eventId": "d1", "tier": "ROC", "lp": 100, "gp": 0 },
+          { "eventId": "d1", "tier": "PREF", "lp": 15.5, "gp": 0 },
+          { "eventId": "d1", "tier": "SPLIT", "lp": 39.6, "gp": 9.9 }
+        ],
+        "totals": { "lp": 155.1, "gp": 9.9 },
+        "endState": { "capitalOutstanding": 0, "prefAccrued": 0 },
+        "metrics": { "paidIn": 100, "dpi": 1.551, "tvpi": 1.551, "irr": null }
+      }
+    },
+    {
+      "id": "A7",
+      "title": "Two LPs with identical terms (A1 flows, commitments 60/40)",
+      "partners": [
+        { "id": "LP-A", "role": "LP", "commitment": 60 },
+        { "id": "LP-B", "role": "LP", "commitment": 40 }
+      ],
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2026-01-01", "amount": 150 }
+      ],
+      "expected": {
+        "allocations": [
+          { "eventId": "d1", "tier": "ROC", "lp": 100, "gp": 0 },
+          { "eventId": "d1", "tier": "PREF", "lp": 10, "gp": 0 },
+          { "eventId": "d1", "tier": "SPLIT", "lp": 32, "gp": 8 }
+        ],
+        "byPartner": {
+          "LP-A": { "lp": 85.2, "gp": 4.8 },
+          "LP-B": { "lp": 56.8, "gp": 3.2 }
+        },
+        "totals": { "lp": 142, "gp": 8 },
+        "endState": { "capitalOutstanding": 0, "prefAccrued": 0 },
+        "metrics": { "paidIn": 100, "dpi": 1.42, "tvpi": 1.42, "irr": 0.42 }
+      }
+    },
+    {
+      "id": "A8",
+      "title": "Remaining NAV counts in TVPI and IRR",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2026-01-01", "amount": 50 }
+      ],
+      "nav": { "date": "2026-01-01", "amount": 80 },
+      "expected": {
+        "allocations": [{ "eventId": "d1", "tier": "ROC", "lp": 50, "gp": 0 }],
+        "totals": { "lp": 50, "gp": 0 },
+        "endState": { "capitalOutstanding": 50, "prefAccrued": 10 },
+        "metrics": { "paidIn": 100, "dpi": 0.5, "tvpi": 1.3, "irr": 0.3 }
+      }
+    },
+    {
+      "id": "A9",
+      "title": "Part-year accrual (182 days, ACT/365F)",
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 },
+        { "id": "d1", "kind": "distribution", "date": "2025-07-02", "amount": 150 }
+      ],
+      "expected": {
+        "allocations": [
+          { "eventId": "d1", "tier": "ROC", "lp": 100, "gp": 0 },
+          { "eventId": "d1", "tier": "PREF", "lp": 4.867192264335829, "gp": 0 },
+          { "eventId": "d1", "tier": "SPLIT", "lp": 36.10624618853134, "gp": 9.026561547132834 }
+        ],
+        "totals": { "lp": 140.97343845286716, "gp": 9.026561547132834 },
+        "endState": { "capitalOutstanding": 0, "prefAccrued": 0 },
+        "metrics": { "paidIn": 100, "dpi": 1.4097343845286716, "tvpi": 1.4097343845286716, "irr": null }
+      }
+    },
+    {
+      "id": "A10",
+      "title": "Catch-up is rejected until Milestone 2",
+      "terms": { "catchUpRate": 1 },
+      "events": [
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 }
+      ],
+      "expectedError": "catchUpRate"
+    },
+    {
+      "id": "A11",
+      "title": "A distribution before the first capital call is rejected",
+      "events": [
+        { "id": "d1", "kind": "distribution", "date": "2024-06-30", "amount": 10 },
+        { "id": "c1", "kind": "capital_call", "date": "2025-01-01", "investment": 100, "fee": 0 }
+      ],
+      "expectedError": "events[0]"
+    }
+  ]
+}
