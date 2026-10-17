@@ -26,7 +26,10 @@ FIXTURES = ROOT / "tests" / "fixtures"
 
 
 def lp_flows_for_case(case: dict) -> list[tuple[str, float]]:
-    """LP view: calls are negative, expected LP distributions positive, NAV positive at the end."""
+    """LP view: calls negative, expected LP distributions positive, net NAV positive at the end.
+
+    Net NAV = NAV minus the expected accrued carry (the GP's share in a hypothetical liquidation).
+    """
     expected_lp_by_event: dict[str, float] = {}
     for row in case["expected"]["allocations"]:
         expected_lp_by_event[row["eventId"]] = expected_lp_by_event.get(row["eventId"], 0.0) + row["lp"]
@@ -39,7 +42,8 @@ def lp_flows_for_case(case: dict) -> list[tuple[str, float]]:
             flows.append((e["date"], expected_lp_by_event.get(e["id"], 0.0)))
     nav = case.get("nav")
     if nav and nav["amount"] > 0:
-        flows.append((nav["date"], nav["amount"]))
+        accrued = case["expected"]["metrics"].get("accruedCarry", 0)
+        flows.append((nav["date"], nav["amount"] - accrued))
     return flows
 
 

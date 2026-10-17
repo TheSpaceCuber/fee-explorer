@@ -1,5 +1,5 @@
 import { dayNumber, isValidDate } from './daycount';
-import type { FundInput } from './types';
+import { COMPOUNDINGS, type FundInput } from './types';
 
 /**
  * Term and input validation.
@@ -31,12 +31,17 @@ export function validate(input: FundInput): ValidationIssue[] {
 
   // --- Terms ---
   if (terms.structure !== 'european') add('terms.structure', 'Only European is supported until M4.');
-  if (terms.compounding !== 'annual') add('terms.compounding', 'Only annual compounding is supported until M2.');
+  if (!COMPOUNDINGS.includes(terms.compounding)) add('terms.compounding', `Must be one of: ${COMPOUNDINGS.join(', ')}.`);
   if (!isNonNegative(terms.hurdleRate)) add('terms.hurdleRate', 'Must be a number ≥ 0.');
   if (!(Number.isFinite(terms.carryRate) && terms.carryRate >= 0 && terms.carryRate < 1)) {
     add('terms.carryRate', 'Must be in [0, 1).');
   }
-  if (terms.catchUpRate !== 0) add('terms.catchUpRate', 'Catch-up is not supported until M2; use 0.');
+  // Catch-up: in that tier the GP takes k of each dollar while trying to reach c of ALL profit,
+  // starting from 0%. If k ≤ c it can never get there, so the tier would never end.
+  const k = terms.catchUpRate;
+  if (!(Number.isFinite(k) && (k === 0 || (k > terms.carryRate && k <= 1)))) {
+    add('terms.catchUpRate', `Must be 0 (no catch-up) or above the carry rate (${terms.carryRate}) and at most 1.`);
+  }
 
   // --- Partners ---
   if (partners.length === 0) add('partners', 'At least one partner is required.');

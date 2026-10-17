@@ -1,12 +1,6 @@
-import type {
-  CarryTerms,
-  FundEvent,
-  PartnerLedger,
-  TierAllocation,
-  TraceStep,
-} from '../types';
+import type { CarryTerms, EventTrace, FundEvent, PartnerLedger, TierAllocation } from '../types';
 import { accrue } from './hurdle';
-import { carrySplit, preferredReturn, returnOfCapital, type TierOutcome } from './tiers';
+import { carrySplit, catchUp, preferredReturn, returnOfCapital, type TierOutcome } from './tiers';
 
 /**
  * European (whole-of-fund) waterfall for one partner.
@@ -23,13 +17,22 @@ export const emptyLedger = (): PartnerLedger => ({
   contributed: 0,
   distributedLp: 0,
   distributedGp: 0,
+  cumulative: { roc: 0, pref: 0, catchUpLp: 0, catchUpGp: 0, splitLp: 0, splitGp: 0 },
 });
 
 export interface StepResult {
   ledger: PartnerLedger;
   allocations: TierAllocation[];
-  trace: TraceStep[];
+  trace: EventTrace;
 }
+
+/** The tiers in payment order. Adding a tier means adding a line here. */
+const TIER_STEPS: ((cash: number, l: PartnerLedger, t: CarryTerms) => TierOutcome)[] = [
+  (cash, l) => returnOfCapital(cash, l),
+  preferredReturn,
+  catchUp,
+  carrySplit,
+];
 
 /**
  * Apply one event (already scaled to this partner's share) to the ledger.
@@ -38,16 +41,19 @@ export interface StepResult {
  * `events.reduce(applyEvent, emptyLedger())`. That same shape gives us:
  *   - step-through mode: show the trace for one event,
  *   - re-runs: same inputs always give the same outputs,
- *   - per-tier storage: the allocations are the rows.
+ *   - per-tier storage: the allocations are the rows,
+ *   - hypothetical liquidation: apply a pretend distribution and look at the result.
  */
 export function applyEvent(
   terms: CarryTerms,
   partnerId: string,
   before: PartnerLedger,
   event: FundEvent,
+  kind: EventTrace['kind'] = event.kind,
 ): StepResult {
   // Always accrue up to the event date first. Pref depends on how long capital was out.
-  let ledger = accrue(before, event.date, terms);
+  const accrued = accrue(before, event.date, terms);
+  let ledger = accrued.ledger;
 
   if (event.kind === 'capital_call') {
     const amount = event.investment + event.fee;
@@ -56,19 +62,18 @@ export function applyEvent(
       capitalOutstanding: ledger.capitalOutstanding + amount,
       contributed: ledger.contributed + amount,
     };
-    return { ledger, allocations: [], trace: [] };
+    return {
+      ledger,
+      allocations: [],
+      trace: { eventId: event.id, date: event.date, kind, amount, accrual: accrued.note, steps: [], ledgerAfter: ledger },
+    };
   }
 
   // Distribution: run the tiers in order, each taking what it's owed from what's left.
   const outcomes: TierOutcome[] = [];
   let cash = event.amount;
-  const steps = [
-    (c: number, l: PartnerLedger) => returnOfCapital(c, l),
-    (c: number, l: PartnerLedger) => preferredReturn(c, l, terms),
-    (c: number, l: PartnerLedger) => carrySplit(c, l, terms),
-  ];
-  for (const step of steps) {
-    const out = step(cash, ledger);
+  for (const step of TIER_STEPS) {
+    const out = step(cash, ledger, terms);
     outcomes.push(out);
     cash = out.remaining;
     ledger = out.ledger;
@@ -81,22 +86,37 @@ export function applyEvent(
   return {
     ledger,
     allocations: outcomes.map((o) => ({ eventId: event.id, partnerId, tier: o.tier, lp: o.lp, gp: o.gp })),
-    trace: outcomes.map((o) => ({
+    trace: {
       eventId: event.id,
-      partnerId,
-      tier: o.tier,
-      available: o.available,
-      lp: o.lp,
-      gp: o.gp,
-      remaining: o.remaining,
-      explanation: o.explanation,
-    })),
+      date: event.date,
+      kind,
+      amount: event.amount,
+      accrual: accrued.note,
+      ledgerAfter: ledger,
+      steps: outcomes.map((o) => ({
+        eventId: event.id,
+        partnerId,
+        tier: o.tier,
+        available: o.available,
+        owed: o.owed,
+        lp: o.lp,
+        gp: o.gp,
+        remaining: o.remaining,
+        explanation: o.explanation,
+      })),
+    },
   };
 }
 
+export interface RunResult {
+  ledger: PartnerLedger;
+  allocations: TierAllocation[];
+  trace: EventTrace[];
+}
+
 /** Run every event for one partner. */
-export function runEuropean(terms: CarryTerms, partnerId: string, events: FundEvent[]): StepResult {
-  return events.reduce<StepResult>(
+export function runEuropean(terms: CarryTerms, partnerId: string, events: FundEvent[]): RunResult {
+  return events.reduce<RunResult>(
     (acc, event) => {
       const step = applyEvent(terms, partnerId, acc.ledger, event);
       return {

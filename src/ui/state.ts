@@ -20,6 +20,8 @@ export interface UiState {
   nav: Flow;
   /** Distribution shown in the step-through panel. */
   selectedDist: string | null;
+  /** Current step in the step-through (0 = before the cash arrives). */
+  step: number;
 }
 
 let counter = 0;
@@ -39,6 +41,7 @@ export function fromPreset(p: Preset): UiState {
       .map((e) => ({ id: e.id, date: e.date, amount: e.amount })),
     nav: { id: 'nav', date: input.nav?.date ?? lastDate(input.events), amount: input.nav?.amount ?? 0 },
     selectedDist: null,
+    step: 0,
   };
 }
 

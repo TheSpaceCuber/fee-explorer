@@ -17,8 +17,8 @@
   /* Tiers, in payment order (fixed categorical order, never cycled) */
   --tier-roc: #2a78d6;
   --tier-pref: #eb6834;
-  --tier-split-lp: #1baf7a;
-  --tier-split-gp: #eda100;
+  --tier-catchup: #1baf7a;
+  --tier-split: #eda100;
 
   --radius: 10px;
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -39,8 +39,8 @@
     --critical: #e66767;
     --tier-roc: #3987e5;
     --tier-pref: #d95926;
-    --tier-split-lp: #199e70;
-    --tier-split-gp: #c98500;
+    --tier-catchup: #199e70;
+    --tier-split: #c98500;
   }
 }
 :root[data-theme='dark'] {
@@ -57,8 +57,8 @@
   --critical: #e66767;
   --tier-roc: #3987e5;
   --tier-pref: #d95926;
-  --tier-split-lp: #199e70;
-  --tier-split-gp: #c98500;
+  --tier-catchup: #199e70;
+  --tier-split: #c98500;
 }
 
 * { box-sizing: border-box; }
@@ -150,7 +150,11 @@ input[type='number'], input[type='date'], input[type='text'], select {
 /* ---------- Chart ---------- */
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-secondary); font-size: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
-.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.swatch.hatched {
+  background: repeating-linear-gradient(45deg, var(--text-secondary) 0 2px, transparent 2px 4px);
+  outline: 1px solid var(--text-secondary); outline-offset: -1px;
+}
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .chart .axis text, .chart .row-label { fill: var(--text-secondary); font-size: 12px; }
 .chart .total-label { fill: var(--text-primary); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -176,6 +180,39 @@ th { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
 tfoot td { font-weight: 600; border-bottom: none; }
 .table-scroll { overflow-x: auto; }
 .table-view summary { cursor: pointer; color: var(--text-secondary); margin-top: 8px; }
+
+/* ---------- Step-through ---------- */
+.st-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 14px; }
+.st-controls button {
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); cursor: pointer;
+}
+.st-controls button.primary { border-color: var(--accent); }
+.st-controls button:disabled { color: var(--text-muted); cursor: not-allowed; }
+.st-progress { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+.st-cash { margin-bottom: 14px; }
+.st-cash-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.st-track { position: relative; height: 18px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.st-cash-fill { height: 100%; background: var(--text-secondary); opacity: 0.5; border-radius: 0 4px 4px 0; transition: width 0.5s ease; }
+.st-buckets { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.st-bucket { padding: 10px 12px; border: 1px solid var(--grid); border-radius: 8px; transition: opacity 0.3s, border-color 0.3s; }
+.st-bucket.upcoming { opacity: 0.5; }
+.st-bucket.current { border-color: var(--c); box-shadow: inset 3px 0 0 var(--c); }
+.st-head { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; margin-bottom: 6px; }
+.st-name { font-weight: 600; }
+.st-owed { color: var(--text-muted); font-size: 12px; }
+.st-paid { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 13px; }
+.st-bucket .st-track { background: transparent; overflow: visible; }
+.st-capacity { position: absolute; inset: 0 auto 0 0; border: 1.5px dashed var(--c); border-radius: 4px; opacity: 0.7; }
+.st-fill { position: absolute; top: 0; bottom: 0; transition: width 0.6s ease, left 0.6s ease; }
+.st-fill.lp { left: 0; background: var(--c); border-radius: 4px 0 0 4px; }
+.st-fill.gp {
+  background: repeating-linear-gradient(45deg, var(--c) 0 3px, color-mix(in srgb, var(--c) 35%, transparent) 3px 6px);
+}
+.st-explain {
+  margin-top: 14px; padding: 12px 14px; border-radius: 8px; background: var(--surface-2); line-height: 1.6;
+}
+tr.hypothetical td { font-style: italic; color: var(--text-secondary); font-weight: 400; }
+.tooltip .tt-hint { color: var(--text-muted); margin-top: 4px; }
 
 /* ---------- Trace ---------- */
 .trace-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

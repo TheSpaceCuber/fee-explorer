@@ -1,4 +1,4 @@
-import type { WaterfallResult } from '../../engine';
+import { TIERS, type FundAllocation, type Tier, type WaterfallResult } from '../../engine';
 import { money, shortDate } from '../format';
 import type { Flow } from '../state';
 
@@ -10,29 +10,40 @@ import type { Flow } from '../state';
  *  - one bar per row, ≤ 24px thick, growing from a single baseline;
  *  - a 2px gap (empty space) between stacked segments, instead of drawn borders;
  *  - 4px rounded corners only at the data end, square at the baseline;
- *  - hairline gridlines, a hover tooltip on every segment, and a table view as an alternative.
+ *  - hairline gridlines, a hover tooltip on every segment, and a table view as an alternative;
+ *  - the GP's share is hatched (texture), so identity never depends on color alone.
  */
 
-export const SEGMENTS = [
-  { key: 'ROC', label: 'Return of capital → LP', color: 'var(--tier-roc)' },
-  { key: 'PREF', label: 'Preferred return → LP', color: 'var(--tier-pref)' },
-  { key: 'SPLIT_LP', label: 'Profit split → LP', color: 'var(--tier-split-lp)' },
-  { key: 'SPLIT_GP', label: 'Carry → GP', color: 'var(--tier-split-gp)' },
-] as const;
-export type SegmentKey = (typeof SEGMENTS)[number]['key'];
+/** One color per tier, in payment order (fixed categorical order, never cycled). */
+export const TIER_STYLE = {
+  ROC: { label: 'Return of capital', color: 'var(--tier-roc)' },
+  PREF: { label: 'Preferred return', color: 'var(--tier-pref)' },
+  CATCHUP: { label: 'GP catch-up', color: 'var(--tier-catchup)' },
+  SPLIT: { label: 'Profit split', color: 'var(--tier-split)' },
+} as const satisfies Record<Tier, { label: string; color: string }>;
 
-/** Per distribution: amount in each of the four segments. */
-export function segmentsFor(result: WaterfallResult, eventId: string): Record<SegmentKey, number> {
-  const rows = result.allocations.filter((a) => a.eventId === eventId);
-  const get = (tier: string) => rows.find((r) => r.tier === tier);
-  return {
-    ROC: get('ROC')?.lp ?? 0,
-    PREF: get('PREF')?.lp ?? 0,
-    SPLIT_LP: get('SPLIT')?.lp ?? 0,
-    SPLIT_GP: get('SPLIT')?.gp ?? 0,
-  };
+/**
+ * The pieces of one bar, in drawing order. Each tier can have an LP part (solid) and a GP part
+ * (hatched in the same color). Color says which tier, texture says who gets it, so neither
+ * relies on telling six colors apart.
+ */
+export interface Piece {
+  tier: Tier;
+  who: 'LP' | 'GP';
+  amount: number;
 }
 
+export function piecesFor(allocations: FundAllocation[], eventId: string): Piece[] {
+  const pieces: Piece[] = [];
+  for (const tier of TIERS) {
+    const row = allocations.find((a) => a.eventId === eventId && a.tier === tier);
+    pieces.push({ tier, who: 'LP', amount: row?.lp ?? 0 });
+    pieces.push({ tier, who: 'GP', amount: row?.gp ?? 0 });
+  }
+  return pieces;
+}
+
+const W_FALLBACK = 760;
 const LABEL_W = 78;
 const RIGHT_W = 64;
 const ROW_H = 38;
@@ -42,7 +53,7 @@ const AXIS_H = 22;
 
 export interface ChartHandlers {
   onSelect: (eventId: string) => void;
-  onHover: (e: MouseEvent, eventId: string, key: SegmentKey | null) => void;
+  onHover: (e: MouseEvent, eventId: string, piece: Piece | null) => void;
   onLeave: () => void;
 }
 
@@ -60,7 +71,7 @@ export function renderChart(
   }
 
   // Draw at the container's real pixel width so 12px text stays 12px on a phone.
-  const W = Math.max(300, Math.round(root.clientWidth) || 760);
+  const W = Math.max(300, Math.round(root.clientWidth) || W_FALLBACK);
   const plotW = W - LABEL_W - RIGHT_W;
   const maxAmount = Math.max(...sorted.map((d) => d.amount), 1e-9);
   const ticks = niceTicks(maxAmount, W < 500 ? 3 : 5);
@@ -69,6 +80,7 @@ export function renderChart(
   const height = sorted.length * ROW_H + AXIS_H;
 
   let svg = `<svg viewBox="0 0 ${W} ${height}" role="img" aria-label="Stacked bars: how each distribution was split across the waterfall tiers">`;
+  svg += hatchDefs();
 
   // Gridlines and tick labels first, so the bars draw on top.
   svg += '<g class="axis">';
@@ -82,20 +94,22 @@ export function renderChart(
   sorted.forEach((d, i) => {
     const y0 = i * ROW_H;
     const barY = y0 + (ROW_H - BAR_H) / 2;
-    const segs = segmentsFor(result, d.id);
-    const nonZero = SEGMENTS.filter((s) => segs[s.key] > 1e-12);
+    const pieces = piecesFor(result.allocations, d.id);
+    const nonZero = pieces.filter((p) => p.amount > 1e-12);
 
     // A full-width transparent rectangle makes the whole row clickable and hoverable, not just the thin bar.
     svg += `<rect class="row-hit ${d.id === selected ? 'selected' : ''}" data-row="${d.id}" x="0" y="${y0}" width="${W}" height="${ROW_H}" rx="6"/>`;
     svg += `<text class="row-label" x="0" y="${barY + BAR_H / 2 + 4}">${shortDate(d.date)}</text>`;
 
     let cursor = LABEL_W;
-    nonZero.forEach((s, j) => {
+    nonZero.forEach((p, j) => {
       const isLast = j === nonZero.length - 1;
-      const full = x(segs[s.key]);
+      const full = x(p.amount);
       // Leave a 2px gap after every segment except the last, if there's room for it.
       const w = isLast || full <= GAP ? full : full - GAP;
-      svg += `<path class="seg" data-row="${d.id}" data-seg="${s.key}" fill="${s.color}" d="${barPath(cursor, barY, Math.max(w, 0.5), BAR_H, isLast ? 4 : 0)}"/>`;
+      const fill = p.who === 'GP' ? `url(#hatch-${p.tier})` : TIER_STYLE[p.tier].color;
+      const i = pieces.indexOf(p);
+      svg += `<path class="seg" data-row="${d.id}" data-piece="${i}" fill="${fill}" d="${barPath(cursor, barY, Math.max(w, 0.5), BAR_H, isLast ? 4 : 0)}"/>`;
       cursor += full;
     });
 
@@ -107,11 +121,24 @@ export function renderChart(
 
   root.querySelectorAll<SVGElement>('[data-row]').forEach((el) => {
     const id = el.dataset.row!;
-    const key = (el.dataset.seg ?? null) as SegmentKey | null;
+    const piece = el.dataset.piece === undefined ? null : piecesFor(result.allocations, id)[Number(el.dataset.piece)]!;
     el.addEventListener('click', () => h.onSelect(id));
-    el.addEventListener('mousemove', (e) => h.onHover(e, id, key));
+    el.addEventListener('mousemove', (e) => h.onHover(e, id, piece));
     el.addEventListener('mouseleave', h.onLeave);
   });
+}
+
+/**
+ * Diagonal-stripe patterns, one per tier: a pale wash of the tier color with solid stripes.
+ * Used for the GP's part of each tier.
+ */
+export function hatchDefs(): string {
+  return `<defs>${TIERS.map(
+    (t) => `<pattern id="hatch-${t}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+      <rect width="6" height="6" fill="${TIER_STYLE[t].color}" opacity="0.35"/>
+      <rect width="3" height="6" fill="${TIER_STYLE[t].color}"/>
+    </pattern>`,
+  ).join('')}</defs>`;
 }
 
 /**

@@ -41,10 +41,12 @@ export function renderInputs(
       <input type="range" id="carry" min="0" max="0.3" step="0.01" value="${t.carryRate}">
       <p class="hint">The GP's share of profit above the hurdle.</p>
     </div>
-    ${segmented('Compounding', 'compounding', [['annual', 'Annual'], ['simple', 'Simple'], ['quarterly', 'Quarterly']], t.compounding, ['simple', 'quarterly'])}
-    ${segmented('GP catch-up', 'catchup', [['0', '0%'], ['0.5', '50%'], ['1', '100%']], String(t.catchUpRate), ['0.5', '1'])}
+    ${segmented('Pref compounding', 'compounding', [['simple', 'Simple'], ['annual', 'Annual'], ['quarterly', 'Quarterly'], ['daily', 'Daily']], t.compounding, [])}
+    <p class="hint">Simple: only capital earns the hurdle. Compound: unpaid pref earns it too, so more pref is owed.</p>
+    ${segmented('GP catch-up', 'catchup', [['0', 'None'], ['0.5', '50%'], ['0.8', '80%'], ['1', '100%']], String(t.catchUpRate), [])}
+    <p class="hint">The GP's share of each dollar after the pref, until it has its carry rate of all profit. ILPA's model LPA uses 80%.</p>
     ${segmented('Structure', 'structure', [['european', 'European'], ['american', 'American']], t.structure, ['american'])}
-    <p class="hint">Greyed-out options arrive in later milestones: compounding and catch-up in M2, American in M4.</p>
+    <p class="hint">American (deal-by-deal) arrives in M4.</p>
 
     <h3>LPs <span class="hint">(name, commitment)</span></h3>
     <div class="rows" id="lps">
@@ -74,7 +76,7 @@ export function renderInputs(
       <input type="number" aria-label="NAV amount" id="nav-amount" min="0" step="1" value="${state.nav.amount}">
       <span></span>
     </div>
-    <p class="hint">What the fund still holds (NAV). It counts in TVPI and IRR. In M1 it's gross, before any carry it would trigger.</p>
+    <p class="hint">What the fund still holds (NAV). TVPI and IRR use it net of the carry the GP would earn if it were sold (accrued carry). Set it to 0 for a fully realized fund.</p>
   `;
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
@@ -113,6 +115,20 @@ export function renderInputs(
     showSliders();
     edited();
   });
+
+  // --- Compounding and catch-up (radio groups) ---
+  root.querySelectorAll<HTMLInputElement>('input[name="compounding"]').forEach((el) =>
+    el.addEventListener('change', () => {
+      state.terms.compounding = el.value as typeof state.terms.compounding;
+      edited();
+    }),
+  );
+  root.querySelectorAll<HTMLInputElement>('input[name="catchup"]').forEach((el) =>
+    el.addEventListener('change', () => {
+      state.terms.catchUpRate = Number(el.value);
+      edited();
+    }),
+  );
 
   // --- LPs ---
   root.querySelectorAll<HTMLInputElement>('[data-lp-name]').forEach((el) =>

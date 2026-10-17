@@ -80,6 +80,7 @@ describe('hand-worked cases', () => {
       expect(m.paidIn).toBeCloseTo(expected.metrics.paidIn, 9);
       expect(m.dpi!).toBeCloseTo(expected.metrics.dpi, 9);
       expect(m.tvpi!).toBeCloseTo(expected.metrics.tvpi, 9);
+      expect(m.accruedCarry).toBeCloseTo(expected.metrics.accruedCarry ?? 0, 9);
       // IRR: use the hand-derived value if there is one, otherwise the Python oracle's.
       const wantIrr = expected.metrics.irr ?? oracleIrr.get(c.id);
       expect(wantIrr, 'no expected IRR in fixture or oracle').toBeTypeOf('number');
@@ -93,5 +94,5 @@ interface Expected {
   totals: { lp: number; gp: number };
   endState: { capitalOutstanding: number; prefAccrued: number };
   byPartner?: Record<string, { lp: number; gp: number }>;
-  metrics: { paidIn: number; dpi: number; tvpi: number; irr: number | null };
+  metrics: { paidIn: number; dpi: number; tvpi: number; irr: number | null; accruedCarry?: number };
 }

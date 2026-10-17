@@ -13,16 +13,29 @@ export type ISODate = string;
 // ---------------------------------------------------------------------------
 
 /**
+ * How the hurdle balance grows between events. See carry/hurdle.ts and docs/concepts.md.
+ *  - simple:    only outstanding capital earns the hurdle; unpaid pref doesn't
+ *  - annual:    (1 + r)^t, the IRR-equivalent convention
+ *  - quarterly: (1 + r/4)^(4t)
+ *  - daily:     (1 + r/365)^(365t)
+ */
+export type Compounding = 'simple' | 'annual' | 'quarterly' | 'daily';
+export const COMPOUNDINGS: readonly Compounding[] = ['simple', 'annual', 'quarterly', 'daily'];
+
+/**
  * Carried-interest terms. These are the waterfall parts of an LPA.
- * M1 supports only European, annual compounding and no catch-up. The types are deliberately
- * narrow so the compiler stops us using features before they exist. Later milestones widen them.
+ * The types are deliberately narrow (e.g. structure is only 'european' until M4) so the
+ * compiler stops us using features before they exist.
  */
 export interface CarryTerms {
   structure: 'european';
   /** Preferred return ("hurdle"), e.g. 0.08 for 8% a year. */
   hurdleRate: number;
-  compounding: 'annual';
-  /** GP share of each dollar inside the catch-up tier. Must be 0 in M1. */
+  compounding: Compounding;
+  /**
+   * GP share of each dollar inside the catch-up tier: 0 (no catch-up), or above carryRate up to 1.
+   * 1 = "full" catch-up. The ILPA model LPA brackets 0.8.
+   */
   catchUpRate: number;
   /** GP share of profits above the hurdle, e.g. 0.20. */
   carryRate: number;
@@ -81,9 +94,19 @@ export interface FundInput {
 // State and outputs
 // ---------------------------------------------------------------------------
 
-/** The waterfall tiers, in payment order. CATCHUP is added in M2. */
-export type Tier = 'ROC' | 'PREF' | 'SPLIT';
-export const TIERS: readonly Tier[] = ['ROC', 'PREF', 'SPLIT'];
+/** The waterfall tiers, in payment order. */
+export type Tier = 'ROC' | 'PREF' | 'CATCHUP' | 'SPLIT';
+export const TIERS: readonly Tier[] = ['ROC', 'PREF', 'CATCHUP', 'SPLIT'];
+
+/** Running totals per tier. The catch-up tier needs them to know how far behind the GP is. */
+export interface Cumulative {
+  roc: number;
+  pref: number;
+  catchUpLp: number;
+  catchUpGp: number;
+  splitLp: number;
+  splitGp: number;
+}
 
 /**
  * What the waterfall must remember about one partner between events.
@@ -102,6 +125,7 @@ export interface PartnerLedger {
   contributed: number;
   distributedLp: number;
   distributedGp: number;
+  cumulative: Cumulative;
 }
 
 /** One tier's share of one distribution, for one partner. This is what a database row stores. */
@@ -122,6 +146,8 @@ export interface TraceStep {
   tier: Tier;
   /** Cash arriving at this tier. */
   available: number;
+  /** What the tier was owed before paying (null for SPLIT, which takes everything left). */
+  owed: number | null;
   lp: number;
   gp: number;
   /** Cash passed on to the next tier. */
@@ -129,17 +155,49 @@ export interface TraceStep {
   explanation: string;
 }
 
+/** How the hurdle account moved between the previous event and this one. */
+export interface AccrualNote {
+  /** Years since the previous event (ACT/365F). */
+  years: number;
+  compounding: Compounding;
+  capital: number;
+  prefBefore: number;
+  prefAfter: number;
+}
+
+/** Everything that happened to one partner at one event: for step-through and debugging. */
+export interface EventTrace {
+  eventId: string;
+  date: ISODate;
+  kind: FundEvent['kind'] | 'liquidation';
+  /** Call or distribution amount for this partner. */
+  amount: number;
+  accrual: AccrualNote;
+  /** Tier steps (distributions only; empty for calls). */
+  steps: TraceStep[];
+  ledgerAfter: PartnerLedger;
+}
+
 export interface PartnerResult {
   partnerId: string;
   /** Share of each fund-level flow (commitment / total commitments). */
   share: number;
   allocations: TierAllocation[];
-  trace: TraceStep[];
+  trace: EventTrace[];
   ledger: PartnerLedger;
+  /**
+   * Hypothetical liquidation: what the waterfall would do if the NAV were paid out on its date.
+   * Not a real event, so it isn't in `allocations` and doesn't change `ledger`.
+   */
+  liquidation: EventTrace | null;
 }
+
+export type FundAllocation = Omit<TierAllocation, 'partnerId'>;
 
 export interface WaterfallResult {
   partners: PartnerResult[];
   /** Fund-level allocations: partner rows summed per (event, tier). Every tier is listed, zeros included. */
-  allocations: Omit<TierAllocation, 'partnerId'>[];
+  allocations: FundAllocation[];
+  /** Fund-level hypothetical liquidation of the NAV (null when there's no NAV). */
+  liquidation: { lp: number; gp: number; allocations: FundAllocation[] } | null;
 }
