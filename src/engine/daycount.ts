@@ -10,6 +10,9 @@ const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
  * in local time can be 23 or 25 hours from the previous day, which would break day counts.
  */
 export function dayNumber(date: ISODate): number {
+  // Pure function of its input, called thousands of times per run (accrual, fee bases), so cache it.
+  const cached = cache.get(date);
+  if (cached !== undefined) return cached;
   const m = ISO_RE.exec(date);
   if (!m) throw new Error(`Invalid ISO date: ${date}`);
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
@@ -19,8 +22,12 @@ export function dayNumber(date: ISODate): number {
   if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) {
     throw new Error(`Invalid calendar date: ${date}`);
   }
-  return ms / MS_PER_DAY;
+  const day = ms / MS_PER_DAY;
+  if (cache.size > 50_000) cache.clear(); // keep memory bounded
+  cache.set(date, day);
+  return day;
 }
+const cache = new Map<string, number>();
 
 export function isValidDate(date: ISODate): boolean {
   try {

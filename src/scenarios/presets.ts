@@ -1,4 +1,6 @@
 import type { FundEvent, FundInput, Partner } from '../engine';
+import { calibrate, type AssumedTerms, type ReportedFund, type Shape } from './calibrate';
+import { buyoutShape, OPERF_SOURCE, REPORTED, typicalBuyoutTerms } from './public';
 
 /**
  * Preset scenarios. All synthetic: invented LPs, round-ish numbers, amounts in $ millions.
@@ -11,6 +13,29 @@ export interface Preset {
   name: string;
   blurb: string;
   input: FundInput;
+  /** Presets reconstructed from published net figures carry what they were calibrated to. */
+  calibration?: { reported: ReportedFund; source: typeof OPERF_SOURCE; shape: Shape; terms: AssumedTerms };
+}
+
+/**
+ * A preset calibrated to a fund's published net figures. The calibration (~50–100ms) runs the
+ * first time the preset is opened, not when the page loads, and is cached after that.
+ */
+function calibratedPreset(key: keyof typeof REPORTED, id: string, name: string, blurb: string): Preset {
+  const reported = REPORTED[key];
+  const shape = buyoutShape(reported.vintage, reported.nav > 0 ? 0.05 : 0);
+  const terms = typicalBuyoutTerms(reported.vintage);
+  let cached: FundInput | null = null;
+  return {
+    id,
+    name,
+    blurb,
+    get input() {
+      cached ??= calibrate(reported, shape, terms).input;
+      return cached;
+    },
+    calibration: { reported, source: OPERF_SOURCE, shape, terms },
+  };
 }
 
 const LPS: Partner[] = [
@@ -146,6 +171,23 @@ export const PRESETS: Preset[] = [
       ],
     },
   },
+  calibratedPreset(
+    'adventVI',
+    'public-advent-vi',
+    'Public data: a strong 2008 buyout fund',
+    'Reconstructed from a public pension\'s published NET figures for Advent International GPE VI-A (2008): $100m committed, ' +
+      '$100.0m paid in, $200.8m received, $7.6m left, 2.08x and 16.3% net (Oregon PERF, 31 Dec 2024). The real dates and ' +
+      'terms are not public, so the timing follows a typical buyout pattern and the terms are assumed. The engine then found ' +
+      'gross flows that reproduce the net figures. See "Net to gross" below.',
+  ),
+  calibratedPreset(
+    'avistaIII',
+    'public-avista-iii',
+    'Public data: a break-even 2011 fund',
+    'Reconstructed from published NET figures for Avista Capital Partners III (2011): $113.7m paid in, $113.6m received, ' +
+      '1.00x and 0.0% net (Oregon PERF, 31 Dec 2024). Under the assumed terms the deals did make money, about 1.1x gross, ' +
+      'but management fees took all of it, and with the hurdle never cleared there was no carry.',
+  ),
   {
     id: 'textbook-100',
     name: 'Textbook $100 fund',

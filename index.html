@@ -7,18 +7,19 @@
     <meta name="description" content="Learn how private equity fees and distribution waterfalls work. All data is synthetic." />
   </head>
   <body>
+    <a class="skip-link" href="#view-business">Skip to content</a>
     <header class="site-header">
       <div>
         <h1>Waterfall Explorer</h1>
         <p class="subtitle">How a fund's distributions are split between investors (LPs) and the manager (GP). Synthetic data, $ millions.</p>
       </div>
       <nav class="tabs" role="tablist" aria-label="Views">
-        <button role="tab" aria-selected="true" aria-controls="view-business" id="tab-business">How the waterfall works</button>
-        <button role="tab" aria-selected="false" aria-controls="view-technical" id="tab-technical">How it's calculated and stored</button>
+        <button role="tab" aria-selected="true" aria-controls="view-business" id="tab-business" tabindex="0">How the waterfall works</button>
+        <button role="tab" aria-selected="false" aria-controls="view-technical" id="tab-technical" tabindex="-1">How it's calculated and stored</button>
       </nav>
     </header>
 
-    <main class="layout" id="view-business" role="tabpanel" aria-labelledby="tab-business">
+    <main class="layout" id="view-business" role="tabpanel" aria-labelledby="tab-business" tabindex="-1">
       <aside class="panel inputs" id="inputs" aria-label="Fund inputs"></aside>
 
       <section class="outputs">
@@ -47,6 +48,11 @@
           <div id="bridge" class="chart"></div>
         </section>
 
+        <section class="panel" hidden>
+          <h2>Net to gross: what did the deals make?</h2>
+          <div id="netgross"></div>
+        </section>
+
         <section class="panel" id="trace"></section>
 
         <section class="panel" id="fees-panel">
@@ -65,7 +71,7 @@
       </section>
     </main>
 
-    <main class="tech" id="view-technical" role="tabpanel" aria-labelledby="tab-technical" hidden></main>
+    <main class="tech" id="view-technical" role="tabpanel" aria-labelledby="tab-technical" tabindex="-1" hidden></main>
 
     <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
     <script type="module" src="/src/ui/main.ts"></script>

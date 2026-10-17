@@ -5,6 +5,7 @@ import { piecesFor, renderChart, TIER_STYLE, type Piece } from './business/chart
 import { renderInputs } from './business/inputs';
 import { renderBridge } from './business/bridge';
 import { renderComparison } from './business/comparison';
+import { renderNetToGross } from './business/netgross';
 import { renderFeeChart, renderFeeTable } from './business/fees';
 import { renderAllocTable, renderLegend, renderLpTable, renderTiles } from './business/panels';
 import { LAST_STEP, renderStepThrough } from './business/stepthrough';
@@ -22,6 +23,8 @@ import { createTechnicalView } from './technical/technical';
 
 const el = (id: string) => document.getElementById(id)!;
 let state: UiState = fromPreset(PRESETS[0]!);
+/** The calibrated preset the current inputs came from (stays set after edits, so the panel can compare). */
+let calibratedFrom: string | null = null;
 
 // Tab 2 keeps its own run history. A new preset is a different fund, so the history starts over.
 const technical = createTechnicalView(
@@ -34,6 +37,7 @@ function mountInputs() {
   renderInputs(el('inputs'), state, update, (next) => {
     if (next) {
       state = next;
+      calibratedFrom = PRESETS.find((p) => p.id === next.presetId)?.calibration ? next.presetId : null;
       technical.reset();
     }
     stopPlaying();
@@ -88,6 +92,7 @@ function update() {
   });
   renderLpTable(el('lp-table'), result.partners, state, input);
   renderBridge(el('bridge'), metrics);
+  renderNetToGross(el('netgross'), PRESETS.find((p) => p.id === calibratedFrom), metrics, state.presetId !== calibratedFrom);
   el('comparison-panel').hidden = result.comparison === null;
   renderComparison(el('comparison'), input, result);
   renderFeeChart(el('fee-chart'), result.fees, showTooltipHtml, hideTooltip);
@@ -155,10 +160,11 @@ function hideTooltip() {
   tooltip.hidden = true;
 }
 
-// Keyboard: ← / → step through when focus isn't in a form field.
+// Keyboard: ← / → step through when Tab 1 is showing and focus isn't in a form field or on the tabs.
 document.addEventListener('keydown', (e) => {
-  const tag = (e.target as HTMLElement).tagName;
-  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return;
+  const target = e.target as HTMLElement;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.getAttribute('role') === 'tab') return;
+  if (el('view-business').hidden) return;
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
     stopPlaying();
     state.step = Math.max(0, Math.min(LAST_STEP, state.step + (e.key === 'ArrowRight' ? 1 : -1)));
@@ -170,6 +176,10 @@ document.addEventListener('keydown', (e) => {
 function showTab(which: 'business' | 'technical') {
   el('tab-business').setAttribute('aria-selected', String(which === 'business'));
   el('tab-technical').setAttribute('aria-selected', String(which === 'technical'));
+  // ARIA tabs pattern: only the selected tab is in the Tab order; arrow keys move between tabs.
+  el('tab-business').tabIndex = which === 'business' ? 0 : -1;
+  el('tab-technical').tabIndex = which === 'technical' ? 0 : -1;
+  document.querySelector<HTMLAnchorElement>('.skip-link')!.href = `#view-${which}`;
   el('view-business').hidden = which !== 'business';
   el('view-technical').hidden = which !== 'technical';
   hideTooltip();
@@ -183,6 +193,17 @@ function showTab(which: 'business' | 'technical') {
 }
 el('tab-business').addEventListener('click', () => showTab('business'));
 el('tab-technical').addEventListener('click', () => showTab('technical'));
+for (const id of ['tab-business', 'tab-technical']) {
+  el(id).addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+    e.preventDefault();
+    e.stopPropagation(); // don't also step the step-through
+    const next = id === 'tab-business' ? 'technical' : 'business';
+    const target = e.key === 'Home' ? 'business' : e.key === 'End' ? 'technical' : next;
+    showTab(target);
+    el(`tab-${target}`).focus();
+  });
+}
 
 renderLegend(el('legend'));
 mountInputs();

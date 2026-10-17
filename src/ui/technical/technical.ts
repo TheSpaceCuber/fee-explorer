@@ -200,7 +200,8 @@ export function createTechnicalView(root: HTMLElement, getInput: () => FundInput
                 : h.stages.some((s) => s.status === 'failed')
                   ? '<span class="chip failed">✕ rejected, no run</span>'
                   : '<span class="chip">↺ identical inputs, no new run</span>';
-              return `<tr data-row="${i}" class="${i === selected ? 'selected' : ''}">
+              return `<tr data-row="${i}" class="${i === selected ? 'selected' : ''}" tabindex="0" aria-selected="${i === selected}"
+                aria-label="Execution ${h.seq}: ${esc(h.reason)}">
                 <td>${h.seq}</td><td>${esc(h.reason)}</td><td>${result}</td><td><code>${tv}</code></td><td><code>${batch}</code></td>
                 <td>${runRow?.supersedes_run_id ? `<code>${runRow.supersedes_run_id}</code>` : '—'}</td></tr>`;
             })
@@ -240,12 +241,21 @@ export function createTechnicalView(root: HTMLElement, getInput: () => FundInput
         render();
       }),
     );
-    root.querySelectorAll<HTMLTableRowElement>('tr[data-row]').forEach((tr) =>
-      tr.addEventListener('click', () => {
+    root.querySelectorAll<HTMLTableRowElement>('tr[data-row]').forEach((tr) => {
+      const pick = () => {
         selected = Number(tr.dataset.row);
         render();
-      }),
-    );
+        root.querySelector<HTMLElement>(`tr[data-row="${selected}"]`)?.focus();
+      };
+      tr.addEventListener('click', pick);
+      // Rows are clickable, so they must work from the keyboard too.
+      tr.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          pick();
+        }
+      });
+    });
     root.querySelectorAll<HTMLButtonElement>('[data-stage]').forEach((b) =>
       b.addEventListener('click', () => {
         stage = b.dataset.stage as StageId;

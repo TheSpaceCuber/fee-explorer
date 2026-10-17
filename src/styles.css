@@ -10,8 +10,9 @@
   --grid: #e6e5e0;
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
-  --text-muted: #77766f;
+  --text-muted: #6b6a63; /* ≥ 4.5:1 on every light surface */
   --accent: #2a78d6;
+  --accent-text: #1c5cab; /* accent used AS text: darker step so it passes 4.5:1 */
   --critical: #d03b3b;
 
   /* Tiers, in payment order (fixed categorical order, never cycled) */
@@ -36,6 +37,7 @@
     --text-secondary: #c3c2b7;
     --text-muted: #8f8e86;
     --accent: #3987e5;
+    --accent-text: #86b6ef;
     --critical: #e66767;
     --tier-roc: #3987e5;
     --tier-pref: #d95926;
@@ -54,6 +56,7 @@
   --text-secondary: #c3c2b7;
   --text-muted: #8f8e86;
   --accent: #3987e5;
+    --accent-text: #86b6ef;
   --critical: #e66767;
   --tier-roc: #3987e5;
   --tier-pref: #d95926;
@@ -62,6 +65,20 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Keyboard focus: always visible, in the accent colour. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.skip-link {
+  position: absolute; left: 8px; top: -40px; z-index: 20; padding: 6px 12px; border-radius: 6px;
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--accent);
+}
+.skip-link:focus { top: 8px; }
+main:focus { outline: none; }
+
+/* Respect "reduce motion": no animated widths, no smooth scrolling. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
 body {
   margin: 0;
   background: var(--surface-0);
@@ -250,6 +267,16 @@ tr.hypothetical td { font-style: italic; color: var(--text-secondary); font-weig
 .trace-steps p { margin: 2px 0 0; }
 .trace-steps li.idle { opacity: 0.55; }
 
+/* ---------- Net to gross ---------- */
+.ng-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } /* minmax(0,…) lets columns shrink below their content */
+.ng-solve { margin-left: 6px; padding: 6px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface-1); cursor: pointer; }
+.ng-solve:disabled { cursor: progress; color: var(--text-secondary); }
+.ng-table td { text-align: left; white-space: normal; }
+.ng-table td .hint { display: block; }
+.ng-table td.assumed { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+section.panel[hidden] { display: none; }
+@media (max-width: 860px) { .ng-grid { grid-template-columns: minmax(0, 1fr); } }
+
 /* ---------- Tab 2 ---------- */
 .tech { display: grid; gap: 16px; padding: 0 24px 32px; max-width: 1400px; margin: 0 auto; }
 .tech[hidden] { display: none; }
@@ -286,14 +313,14 @@ table.runs td, table.rows td { text-align: left; }
 .stage.st-failed .stage-status, .chip.st-failed { color: var(--critical); }
 .stage.st-skipped { opacity: 0.55; }
 .stage-note { background: var(--surface-2); border-radius: 8px; padding: 8px 12px; }
-.io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.io-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 pre.json, .ddl pre {
   margin: 0; padding: 10px 12px; background: var(--surface-0); border: 1px solid var(--grid); border-radius: 8px;
   font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; overflow: auto; max-height: 320px; white-space: pre;
 }
 .j-key { color: var(--text-primary); font-weight: 600; }
 .j-str { color: var(--text-secondary); }
-.j-num, .j-lit { color: var(--accent); }
+.j-num, .j-lit { color: var(--accent-text); }
 .table-block { margin: 10px 0 16px; }
 .table-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-bottom: 4px; }
 .table-name { font-weight: 600; font-size: 13px !important; }

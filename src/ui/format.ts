@@ -3,8 +3,12 @@
 export const money = (x: number, digits = 1) =>
   `$${x.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}m`;
 
-export const pct = (x: number | null, digits = 1) =>
-  x === null || !Number.isFinite(x) ? '—' : `${(x * 100).toFixed(digits)}%`;
+export const pct = (x: number | null, digits = 1) => {
+  if (x === null || !Number.isFinite(x)) return '—';
+  const v = (x * 100).toFixed(digits);
+  // toFixed(-0.00001) gives "-0.0"; a sign on a rounded zero is just noise.
+  return `${Number(v) === 0 ? (0).toFixed(digits) : v}%`;
+};
 
 export const multiple = (x: number | null) => (x === null || !Number.isFinite(x) ? '—' : `${x.toFixed(2)}x`);
 

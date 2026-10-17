@@ -24,7 +24,10 @@ export interface TierOutcome {
   explanation: string;
 }
 
-const fmt = (x: number) => x.toLocaleString('en-US', { maximumFractionDigits: 2 });
+// One shared formatter: Number.toLocaleString builds a new formatter on every call, which made
+// the explanations the slowest part of a run (found by profiling the calibration).
+const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+const fmt = (x: number) => formatter.format(x);
 const pctOf = (x: number) => `${fmt(x * 100)}%`;
 
 /** Add amounts to the running totals. */

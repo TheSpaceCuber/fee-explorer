@@ -251,6 +251,26 @@ money paid in on top of the investment. The same story in IRR terms: **gross IRR
 → net IRR**. The gaps are the "fee drag" and "carry drag" LPs talk about. In the full-fund preset
 that's 16.9% → 14.8% → 12.9%.
 
+## Net to gross: what LP reports can't tell you (M6)
+
+LP reports, including public pension disclosures, show **net** figures: paid in, distributed,
+remaining value, net multiple, net IRR. They don't show dated cash flows, the deals' own (gross)
+return, or the fund's terms.
+
+The two public-data presets were **reconstructed**: assume a typical buyout timing and typical
+terms, then search (`src/scenarios/calibrate.ts`) for gross flows that make the engine reproduce
+the published net figures exactly.
+
+Then the panel does it again under nine different fee/carry assumptions. Every one reproduces the
+same net result, but they need different gross returns. For the 2008 fund (2.08x, 16.3% net), the
+deals must have made anywhere from about 2.46x to 2.86x gross (19.5%–22.4% IRR). So:
+
+- **net alone doesn't identify gross.** You need the terms, which is why LPs and consultants ask
+  for fee and carry details, and why ILPA pushes for standard fee reporting;
+- **fees bite hardest when returns are low.** In the break-even 2011 fund, the deals made about
+  1.1x gross, management fees took all of it, and carry never applied. The carry rate made no
+  difference at all.
+
 ## Performance metrics
 
 - **Paid-in:** total contributed capital (investment + fees). LP metrics cover LP investors only,

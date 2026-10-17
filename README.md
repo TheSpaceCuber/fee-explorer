@@ -22,6 +22,12 @@ npm test           # hand-worked cases, property tests, XIRR vs pyxirr
 npm run build      # static site in dist/
 ```
 
+## Publish to GitHub Pages
+
+`.github/workflows/pages.yml` tests, builds and publishes the site on every push to `main`.
+One-time setup: push the repository to GitHub, then in **Settings → Pages** set the source to
+**GitHub Actions**. The site works from any sub-path because Vite builds with relative paths.
+
 ## Regenerate the XIRR oracle (optional)
 
 ```bash
@@ -37,5 +43,5 @@ python -m venv .venv
 | `src/engine/` | Pure waterfall engine: no DOM, no clock. The UI imports only `src/engine/index.ts`. |
 | `src/pipeline/` | Pure Tab 2 pipeline: terms → approval → cash flows → run → fees → allocations → reports, into append-only tables. |
 | `src/ui/` | Plain TypeScript and SVG. State → engine → render. |
-| `src/scenarios/` | Preset funds. |
+| `src/scenarios/` | Preset funds, and the calibration that rebuilds two of them from public pension data (see `sources.md`). |
 | `tests/fixtures/` | Language-neutral expected results (JSON), shared with any future engine. |
