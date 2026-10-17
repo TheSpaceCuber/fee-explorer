@@ -1,9 +1,14 @@
-# Fund Economics Explorer: Plan (v2)
+# Fund Economics Explorer: Plan (v3)
 
-A static learning site that shows how money moves between investors (LPs) and the manager (GP).
-It covers three things: **management fees**, **carried interest** through a distribution waterfall
-(European and American), and **performance fees** in evergreen funds. A second tab shows how a
-production system would configure, calculate and store all of this.
+A static learning site that shows how money moves between investors (LPs) and the manager (GP) in a
+**closed-ended private equity fund**. It covers **management fees** and **carried interest**
+through a distribution waterfall, both European (whole-of-fund) and American (deal-by-deal). A second
+tab shows how a production system would configure, calculate and store all of this.
+
+**Scope: closed-ended funds only.** Evergreen funds (NAV-based performance fees, subscriptions and
+redemptions) and mandates (single-investor vehicles with layered fees) were in the v2 plan and have
+been dropped for now. They could come back as separate milestones later. The engine's shapes don't
+rule them out.
 
 All data is synthetic, or calibrated to public sources and labelled with its source. Employer
 names, products, schemas and internal terms never appear in the repo.
@@ -11,7 +16,7 @@ names, products, schemas and internal terms never appear in the repo.
 ## 0. Purpose
 
 This is a personal **learning project**. Its main job is to help me learn and visualize PE fees
-and pricing: management fees, carry, performance fees, and how the cash moves between LPs and the GP.
+and pricing: management fees, carry, and how the cash moves between LPs and the GP.
 The UI is a way to explore and understand. It is not meant to be a production tool.
 
 **I may build my own Python engine later.** To keep that easy:
@@ -38,136 +43,80 @@ The UI is a way to explore and understand. It is not meant to be a production to
 | **No UI framework** | Each tab is "state → `render(state)`". Charts are hand-written SVG. Keeps attention on the engine. |
 | **Python (oracle only)** | `scripts/xirr_oracle.py` uses `pyxirr` (matches Excel's XIRR) to write expected IRRs to a JSON fixture. |
 
-## 2. Folder structure
+## 2. Folder structure (as built)
 
 ```
 waterfall/
 ├─ index.html  package.json  tsconfig.json  vite.config.ts
 ├─ docs/
 │  ├─ PLAN.md
-│  └─ concepts.md               # plain-English glossary, grows each milestone
+│  └─ concepts.md               # plain-English explanations and formulas, grows each milestone
 ├─ src/
 │  ├─ engine/                   # PURE: no DOM, no clock, no randomness
 │  │  ├─ types.ts
-│  │  ├─ daycount.ts            # ACT/365F year fractions
-│  │  ├─ validate.ts            # term rules (e.g. catch-up rate vs carry rate)
+│  │  ├─ daycount.ts            # ACT/365F year fractions, addMonths
+│  │  ├─ validate.ts            # every input rule, reported with its field path
 │  │  ├─ fees/
-│  │  │  ├─ managementFee.ts    # fee periods, basis, step-down, size discounts
-│  │  │  └─ feeCalls.ts         # turn fees into capital-call events
+│  │  │  └─ managementFee.ts    # billing dates, basis, size discounts, fee calls
 │  │  ├─ carry/
-│  │  │  ├─ hurdle.ts           # pref accrual ("hurdle account")
-│  │  │  ├─ tiers.ts            # ROC, pref, catch-up, split, one function each
-│  │  │  ├─ european.ts         # whole-fund waterfall
-│  │  │  ├─ american.ts         # deal-by-deal + clawback
-│  │  │  └─ liquidation.ts      # hypothetical liquidation → accrued carry on NAV
-│  │  ├─ evergreen/
-│  │  │  └─ performanceFee.ts   # NAV-based fee, high-water mark, crystallization
-│  │  ├─ partners.ts            # per-partner run + fund-level aggregation
+│  │  │  ├─ hurdle.ts           # pref accrual ("hurdle account"), four conventions
+│  │  │  ├─ tiers.ts            # ROC, pref, catch-up, split: one function each
+│  │  │  ├─ european.ts         # whole-fund reducer + shared `distribute`
+│  │  │  ├─ american.ts         # deal-by-deal reducer (per-deal accounts)
+│  │  │  └─ waterfall.ts        # picks the reducer for the structure
+│  │  ├─ partners.ts            # per-partner runs, liquidation, clawback, aggregation
 │  │  ├─ xirr.ts  metrics.ts    # XIRR, DPI, TVPI, gross→net bridge
 │  │  └─ index.ts               # the only module the UI imports
 │  ├─ scenarios/
 │  │  ├─ presets.ts
-│  │  └─ sources.md             # citation for every calibrated preset
-│  ├─ pipeline/                 # PURE: engine result → JSON payloads + table rows (Tab 2)
+│  │  └─ sources.md             # citation for every preset that follows a public source
+│  ├─ pipeline/                 # PURE (M5): engine result → JSON payloads + table rows for Tab 2
 │  ├─ ui/
-│  │  ├─ main.ts  state.ts
-│  │  ├─ business/              # Tab 1
-│  │  └─ technical/             # Tab 2
+│  │  ├─ main.ts  state.ts  format.ts
+│  │  ├─ business/              # Tab 1: inputs, charts, step-through, bridge, comparison
+│  │  └─ technical/             # Tab 2 (M5)
 │  └─ styles.css
 ├─ tests/
 │  ├─ fixtures/hand-worked.md   # the arithmetic, step by step (written first)
 │  ├─ fixtures/hand-worked.json # the same expected results, machine-readable
 │  ├─ fixtures/xirr-oracle.json
+│  ├─ arbitraries.ts            # random-fund generator for property tests
 │  └─ *.test.ts
 └─ scripts/xirr_oracle.py
 ```
 
-## 3. Engine data model
+## 3. Engine data model (as built)
 
-### 3.1 Vehicles and partners
+See `src/engine/types.ts` for the full, commented definitions.
 
 ```ts
-type VehicleKind = 'closed_ended' | 'evergreen' | 'mandate';
-
-interface Partner {
-  id: string;
-  role: 'LP' | 'GP';
-  commitment: number;
-  feeClassId: string;        // which fee terms apply (side letters, size discounts)
-  carryBearing: boolean;     // GP's own commitment: false
+interface FundInput {
+  terms: CarryTerms;            // structure, hurdle, compounding, catch-up, carry, lossRecovery
+  partners: Partner[];          // role 'LP' | 'GP' (GP commitment), commitment, feeClassId?
+  events: FundEvent[];          // capital calls (investment, dealId?) and distributions (amount, costRealized?, dealId?)
+  nav?: NavMark;                // remaining value on a date → hypothetical liquidation
+  fees?: ManagementFeeTerms;    // start date + fee classes (periods, basis, size discount)
 }
 
-interface Vehicle {
-  id: string;
-  kind: VehicleKind;
-  partners: Partner[];
-  feeTerms: Record<string, ManagementFeeTerms>;   // keyed by feeClassId
-  carryTerms?: CarryTerms;                        // closed-ended
-  perfFeeTerms?: PerformanceFeeTerms;             // evergreen
-  underlying?: { vehicleId: string; commitment: number }[];  // mandate → funds
+interface WaterfallResult {
+  partners: PartnerResult[];    // per partner: ledger, allocations, trace, fees, cash flows, clawback
+  allocations: FundAllocation[];// per distribution × tier, LP and GP amounts
+  liquidation: …;               // the NAV "if sold today"
+  fees: FeeLine[];              // every quarterly fee charge
+  comparison: Comparison | null;// American only: European re-run + clawback
 }
 ```
 
-### 3.2 Terms
-
-```ts
-interface ManagementFeeTerms {
-  periods: { from: ISODate; to: ISODate; rate: number;
-             basis: 'commitment' | 'invested_capital' | 'nav' }[];
-  billing: 'quarterly_in_advance';
-  sizeDiscounts?: { minCommitment: number; rateReduction: number }[];  // fee ratchet by size
-}
-
-interface CarryTerms {
-  structure: 'european' | 'american';
-  hurdleRate: number;                 // 0.08
-  compounding: 'simple' | 'annual' | 'quarterly' | 'daily';
-  catchUpRate: number;               // 0, or carryRate < k ≤ 1 (UI: 0 / 50 / 80 / 100%)
-  carryRate: number;                  // 0.20
-  lossRecovery: 'none' | 'realized';  // American only
-  clawback: boolean;                  // American only
-}
-
-interface PerformanceFeeTerms {      // evergreen
-  rate: number;                      // e.g. 0.10 of gains
-  hurdleRate?: number;
-  highWaterMark: boolean;
-  crystallization: 'quarterly' | 'annual';
-}
-```
-
-### 3.3 Events and the ledger
-
-```ts
-type FundEvent =
-  | { kind: 'capital_call'; date; investment: number; fee: number }  // fee part from fees/
-  | { kind: 'distribution'; date; amount: number; dealId?: string }
-  | { kind: 'nav_mark'; date; nav: number }
-  | { kind: 'subscription' | 'redemption'; date; partnerId; amount };  // evergreen
-
-interface PartnerLedger {              // one per partner, per vehicle
-  asOf: ISODate;
-  contributed: { investment: number; fee: number };
-  capitalOutstanding: number;
-  hurdleBalance: number;               // see concepts.md "hurdle account"
-  cumulative: { roc; pref; catchUpGp; catchUpLp; splitLp; splitGp };
-}
-
-interface TierAllocation { eventId; partnerId; tier: 'ROC'|'PREF'|'CATCHUP'|'SPLIT'; lp; gp }
-interface TraceStep { tier; available; consumed; remaining; explanation: string }
-```
-
-### 3.4 How a run works
-
-1. **Fees:** `managementFee(terms, partner, dates)` produces fee amounts. `feeCalls` turns them into the
-   fee part of each capital call.
-2. **Per-partner waterfall:** each LP has its own ledger and is run separately:
-   `events.reduce(applyEvent, initialLedger)`. This is needed because LPs with different fee rates
-   contribute different amounts, so their pref and carry differ. Splitting the fund total pro rata
-   afterwards only works when every LP has identical terms.
-3. **Aggregation:** fund totals are the sum over partners. Property check: Σ partners = fund.
-4. **Rounding:** the engine works in float64. Only `pipeline/` rounds to cents, with the leftover cent
-   assigned so every event still sums exactly.
+How a run works:
+1. **Per partner:** take its commitment share of every investment call and distribution, work out
+   its quarterly management fees and add them as capital calls.
+2. **Waterfall:** `events.reduce(applyEvent, emptyLedger())` with the European or American reducer.
+   Both share the same four tiers.
+3. **NAV:** a hypothetical liquidation gives accrued carry and net NAV.
+4. **American only:** re-run as European and claw back any excess carry.
+5. **Aggregate** partners into fund-level rows; metrics and the bridge are computed from those.
+6. **Rounding:** the engine works in float64. Only `pipeline/` (M5) rounds to cents, with the
+   leftover cent assigned so every event still sums exactly.
 
 ## 4. Milestones
 
@@ -175,26 +124,25 @@ Each milestone ends with a git commit, tests passing, and an updated `concepts.m
 
 | # | Scope | Done when |
 |---|---|---|
-| **M1** European carry basics ✅ | Scaffold. Hand-worked cases written **before** the engine. Waterfall: ROC → pref → 80/20 split (no catch-up), annual compounding. Several LPs with identical terms, each run per partner. XIRR, DPI, TVPI, NAV input. Property tests. Minimal Tab 1. | Hand cases and properties pass. XIRR matches the oracle to 1e-6. The page updates live. |
-| **M2** Catch-up and step-through ✅ | Catch-up at 0/50/100% with validation. All compounding conventions. Step-through mode with plain-English explanations. Accrued carry on NAV (hypothetical liquidation). Presets: clean European, inside the catch-up zone. Terms based on ILPA's model whole-of-fund waterfall. | Hand cases include one that stops partway through catch-up. |
-| **M3** Management fees ✅ | Fee periods (commitment basis during the investment period, invested capital after), step-down, quarterly in advance, funded by capital calls. Size-discount bands (fee ratchet). Fee classes per LP, so per-LP waterfalls now diverge. GP commitment as a fee-free, carry-free partner. Gross → fees → carry → net bridge chart. | A hand-worked fee schedule matches. The bridge reconciles gross to net exactly. |
-| **M4** American waterfall ✅ | Deal-by-deal with a `lossRecovery` toggle (`none` vs `realized`), end-of-fund clawback. Side-by-side with European on the same flows. Realized-loss preset. | American carry minus clawback equals European carry on the reference cases. |
-| **M5** Evergreen performance fees | NAV series, subscriptions and redemptions, performance fee with high-water mark and optional hurdle, periodic crystallization. Shown next to closed-ended carry. | Hand cases: fee only on new highs, none after a drawdown until recovered. |
-| **M6** Mandates (stretch) | A single-investor vehicle that commits into underlying funds. Two layers of fees (mandate-level and underlying-fund-level), looked through to the investor's net. | The look-through bridge reconciles. |
-| **M7** Tab 2 pipeline | Terms config → validation and approval → cash-flow ingestion → fee calc → waterfall calc run → allocation output (rounding) → reporting. JSON in/out per stage, generated rows, DDL sketches. Re-run with new terms adds a calc run instead of overwriting one. | Every row shown is generated from the engine, none hard-coded. |
-| **M8** Public data and polish | Presets calibrated to public pension fund-level data (cited in `sources.md`, labelled as reconstructions). Net-to-gross panel: many gross outcomes fit one net IRR. Storage trade-off notes. Accessibility. GitHub Pages deploy. | |
+| **M1** European carry basics ✅ | Scaffold. Hand-worked cases written **before** the engine. ROC → pref → 80/20 split, annual compounding. Several LPs, each run per partner. XIRR, DPI, TVPI, NAV. Property tests. Minimal Tab 1. | Hand cases and properties pass. XIRR matches the oracle. |
+| **M2** Catch-up and step-through ✅ | Catch-up at 0/50/80/100% with validation. Four compounding conventions. Step-through mode. Accrued carry on NAV. ILPA-style and catch-up-zone presets. | Hand cases include one that stops partway through catch-up. |
+| **M3** Management fees ✅ | Commitment basis, then net invested capital; quarterly in advance; funded by capital calls. Size discounts (whole/marginal), side letters, GP commitment. Gross → net bridge. | Fee schedule matches by hand; the bridge reconciles. |
+| **M4** American waterfall ✅ | Deal-by-deal with loss-recovery toggle, clawback against European, comparison chart, write-off preset. | GP keeps min(American, European) on every case. |
+| **M5** Tab 2 pipeline | Terms config → validation and approval → cash-flow ingestion → fee calc → waterfall calc run → allocation output (rounding) → reporting. JSON in/out per stage, generated rows, DDL sketches. Re-run with new terms adds a calc run instead of overwriting one. | Every row shown is generated from the engine, none hard-coded. |
+| **M6** Public data and polish | Presets calibrated to public pension fund-level data (cited in `sources.md`, labelled as reconstructions). Net-to-gross panel: many gross outcomes fit one net IRR. Storage trade-off notes. Accessibility. GitHub Pages deploy. | |
 
 ### Illustrative tables for Tab 2
 
-`fund_terms`, `fee_schedule`, `partner`, `cash_flow_event`, `calc_run`, `fee_accrual`,
-`waterfall_allocation` (per tier, per partner), `performance_fee_crystallization`.
+`fund_terms`, `fee_schedule`, `partner`, `deal`, `cash_flow_event`, `calc_run`, `fee_accrual`,
+`waterfall_allocation` (per tier, per partner), `clawback`.
 
 ## 5. Decisions taken (from Q&A)
 
+- **Closed-ended funds only.** Evergreens and mandates are out of scope for now.
 - Several LPs, each with their own ledger. GP commitment is modelled as a partner.
-- Management fees and performance fees are in scope (M3, M5).
-- Fees: quarterly in advance from a start date, no pro-ration; basis commitment or net invested
-  capital (investment − cost sold); paid by capital calls; capped at the NAV date.
+- Management fees are in scope (M3). Fees: quarterly in advance from a start date, no pro-ration;
+  basis commitment or net invested capital (investment − cost sold); paid by capital calls;
+  capped at the NAV date.
 - Pref uses the "hurdle account" (IRR-equivalent) convention.
 - Catch-up rate must be 0 or greater than the carry rate. This is enforced in validation.
   The ILPA model LPA brackets an 80:20 catch-up, so the UI offers 0 / 50 / 80 / 100%.
@@ -202,8 +150,8 @@ Each milestone ends with a git commit, tests passing, and an updated `concepts.m
 - American: per-deal hurdle accounts; a distribution's cost sold moves that share into "due";
   fees shared across deals by cost; clawback = max(0, American − European), per partner, at the
   end (or the NAV date, as an exposure).
-- NAV input. TVPI includes NAV. Accrued carry on NAV comes in M2.
+- NAV input. TVPI and net IRR use NAV net of accrued carry.
 - Python is used only as the XIRR oracle for now. I may write my own Python engine later, so the
   fixtures and data shapes stay language-neutral (see §0).
-- Data: hybrid. Terms are based on ILPA's model provisions. Some presets are calibrated to public data.
-  Tests stay synthetic.
+- Data: hybrid. Terms are based on ILPA's model provisions. Some presets will be calibrated to
+  public data (M6). Tests stay synthetic.

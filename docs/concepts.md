@@ -286,7 +286,7 @@ goes out of range. The result is checked against `pyxirr`, which matches Excel.
 
 The engine works in floating point and never rounds. `100 × 1.1 − 100` comes out as
 `10.000000000000014`, so tests compare with a tolerance (1e-9). Rounding to cents is a
-reporting decision. In the Tab 2 pipeline (M7), it's a separate step that keeps every
+reporting decision. In the Tab 2 pipeline (M5), it's a separate step that keeps every
 distribution summing to the cent.
 
 ## Testing lesson: generators must reach the interesting cases

@@ -4,7 +4,7 @@ import type { FundEvent, FundInput, Partner } from '../engine';
  * Preset scenarios. All synthetic: invented LPs, round-ish numbers, amounts in $ millions.
  * The carry terms of the first two presets follow the ILPA Model LPA's whole-of-fund waterfall
  * (see sources.md). The fee terms are typical market terms, not from any one document.
- * M4 adds the American preset. M8 adds presets calibrated to public data.
+ * M6 adds presets calibrated to public data.
  */
 export interface Preset {
   id: string;
