@@ -9,8 +9,15 @@
   <body>
     <button class="skip-link" id="skip-link" type="button">Skip to content</button>
     <header class="site-header">
-      <a class="brand" href="#/">
-        <span class="brand-name">Fee Explorer</span>
+      <a class="brand" href="#/" aria-label="Fee Explorer, home">
+        <!-- Logo: three stepped bars, money flowing down the tiers of a waterfall. -->
+        <svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+          <rect width="36" height="36" rx="9" fill="var(--selected-bg)" />
+          <rect x="8" y="9" width="20" height="5" rx="2" fill="var(--on-selected)" />
+          <rect x="13" y="16" width="15" height="5" rx="2" fill="var(--on-selected)" opacity="0.8" />
+          <rect x="18" y="23" width="10" height="5" rx="2" fill="var(--on-selected)" opacity="0.6" />
+        </svg>
+        <span class="brand-name">Fee <em>Explorer</em></span>
         <span class="subtitle">How private equity funds charge fees, one idea at a time</span>
       </a>
       <nav class="site-nav" aria-label="Main">

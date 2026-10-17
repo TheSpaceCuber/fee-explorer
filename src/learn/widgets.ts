@@ -120,12 +120,12 @@ const returns: Widget<ReturnsP> = {
       root.innerHTML = `
         ${slider('rt-delay', 'Delay every distribution by', p.delay, 0, 3, 0.5, `${p.delay} year${p.delay === 1 ? '' : 's'}`)}
         <div class="tiles">
+          ${stat('IRR: the annual, timing-aware return', pct(m.irr), p.delay > 0 ? `was ${pct(base.irr)} with no delay, for the same money` : 'move the slider: watch this, and TVPI below', true)}
+          ${stat('TVPI', multiple(m.tvpi), `(${money(m.distributedLp)} + ${money(m.nav)}) ÷ ${money(m.paidIn)}`)}
+          ${stat('DPI', multiple(m.dpi), `${money(m.distributedLp)} ÷ ${money(m.paidIn)}`)}
           ${stat('Paid in', money(m.paidIn))}
           ${stat('Distributed', money(m.distributedLp))}
           ${stat('Still held (NAV)', money(m.nav))}
-          ${stat('DPI', multiple(m.dpi), `${money(m.distributedLp)} ÷ ${money(m.paidIn)}`)}
-          ${stat('TVPI', multiple(m.tvpi), `(${money(m.distributedLp)} + ${money(m.nav)}) ÷ ${money(m.paidIn)}`)}
-          ${stat('IRR', pct(m.irr), p.delay > 0 ? `was ${pct(base.irr)} with no delay` : 'annual, timing-aware')}
         </div>`;
       onInput(root, 'rt-delay', (v) => set({ delay: v }));
     });
@@ -149,12 +149,12 @@ const feeRate: Widget<FeeRateP> = {
       root.innerHTML = `
         ${slider('fr-rate', 'Annual fee rate', p.rate, 0, 0.025, 0.0025, pct(p.rate, 2))}
         <div class="tiles">
-          ${stat('Each quarter', money(quarter, 2), `${pct(p.rate, 2)} ÷ 4 × $100m`)}
+          ${stat('Fee charged each quarter', money(quarter, 2), `${pct(p.rate, 2)} a year ÷ 4 quarters × $100m committed`, true)}
           ${stat('Each year', money(quarter * 4, 2))}
           ${stat('Total, 2020–2027', money(total, 1), `${result.fees.length} quarters · ${pct(total / 100, 0)} of the commitment`)}
         </div>
-        <div class="chart" id="fr-chart"></div>
-        <p class="hint">One column per quarter. Flat: the fee doesn't care how the deals are doing.</p>`;
+        <p class="fig-caption"><strong>One column per quarter</strong>, 2020 to 2027. Flat, because the fee doesn't care how the deals are doing.</p>
+        <div class="chart" id="fr-chart"></div>`;
       renderFeeChart(root.querySelector('#fr-chart')!, result.fees, showTooltipHtml, hideTooltip);
       onInput(root, 'fr-rate', (v) => set({ rate: v }));
     });
@@ -180,12 +180,13 @@ const stepDown: Widget<StepDownP> = {
         ${slider('sd-ip', 'Investment period', p.ipYears, 3, 7, 1, `${p.ipYears} years (to ${2020 + p.ipYears})`)}
         ${segmented('sd-basis', 'After that: 1.5% a year on', [['invested_capital', 'Invested capital'], ['commitment', 'Commitment']], p.basis)}
         <div class="tiles">
-          ${stat('Total fees', money(total, 1))}
+          ${stat('Total management fees, 2020–2027', money(total, 1), `2% on commitment, then 1.5% on ${p.basis === 'commitment' ? 'commitment' : 'invested capital'}`, true)}
           ${stat('Without a step-down', money(flat, 1), '2% on commitment throughout')}
           ${stat('Saved by the step-down', money(flat - total, 1))}
         </div>
-        <div class="chart" id="sd-chart"></div>
-        <p class="hint">Sales: mid-2023 (deal D), end of 2024 (B), mid-2026 (A), end of 2027 (C). Hover a column to see its base.</p>`;
+        <p class="fig-caption"><strong>Fee per quarter.</strong> The step down comes at the end of the investment period; after that, each sale
+          (mid-2023, end-2024, mid-2026, end-2027) shrinks invested capital and the fee with it. Hover a column to see its base.</p>
+        <div class="chart" id="sd-chart"></div>`;
       renderFeeChart(root.querySelector('#sd-chart')!, result.fees, showTooltipHtml, hideTooltip);
       onInput(root, 'sd-ip', (v) => set({ ...p, ipYears: v }));
       onRadio(root, 'sd-basis', (v) => set({ ...p, basis: v as StepDownP['basis'] }));
@@ -216,10 +217,10 @@ const feeDrag: Widget<FeeDragP> = {
           <div class="mb-row"><span>= Net profit (the LP)</span><div class="mb-track"><div class="mb-bar gross" style="width:${scale(b.netProfit)}"></div></div><span>${money(b.netProfit)}</span></div>
         </div>
         <div class="tiles pairs">
+          ${stat('LP: net IRR, after fees', pct(m.irr), `the deals made ${pct(b.grossIrr)}: fees cost ${(((b.grossIrr ?? 0) - (m.irr ?? 0)) * 100).toFixed(1)} percentage points`, true)}
           ${stat('Deals: gross multiple', multiple(b.grossMoic), `on ${money(b.investment)} invested`)}
           ${stat('LP: net TVPI', multiple(m.tvpi), `on ${money(m.paidIn)} paid in`)}
-          ${stat('Deals: gross IRR', pct(b.grossIrr))}
-          ${stat('LP: net IRR', pct(m.irr), `fee drag: ${(((b.grossIrr ?? 0) - (m.irr ?? 0)) * 100).toFixed(1)} percentage points`)}
+
         </div>`;
       onInput(root, 'fd-rate', (v) => set({ rate: v }));
     });

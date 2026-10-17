@@ -62,9 +62,9 @@ const clawback: Widget<ClawbackP> = {
       root.innerHTML = `
         ${slider('cb-c', 'Deal C (cost $25m) sells for', p.dealC, 30, 70, 5, money(p.dealC, 0))}
         <div class="tiles pairs">
+          ${stat('Clawback: the GP pays back at the end', money(c.clawback, 1), `${money(c.americanCarry, 1)} received − ${money(c.europeanCarry, 1)} whole-fund = the dashed drop in the chart`, true)}
           ${stat('Carry the GP received, deal by deal', money(c.americanCarry, 1))}
           ${stat('Carry on the whole fund (European)', money(c.europeanCarry, 1))}
-          ${stat('Clawback: GP pays back at the end', money(c.clawback, 1))}
           ${stat('GP keeps', money(c.americanCarry - c.clawback, 1))}
         </div>
         <div class="chart" id="cb-chart"></div>`;

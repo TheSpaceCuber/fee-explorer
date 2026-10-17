@@ -34,8 +34,9 @@ export const onInput = (root: HTMLElement, id: string, f: (v: number) => void) =
 export const onRadio = (root: HTMLElement, name: string, f: (v: string) => void) =>
   root.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((r) => r.addEventListener('change', () => f(r.value)));
 
-export const stat = (label: string, value: string, note = '') =>
-  `<div class="tile"><div class="t-label">${label}</div><div class="t-value">${value}</div>${note ? `<div class="t-note">${note}</div>` : ''}</div>`;
+/** A metric card. `primary` makes it the lesson's headline result: full width and larger. */
+export const stat = (label: string, value: string, note = '', primary = false) =>
+  `<div class="tile${primary ? ' primary' : ''}" data-key="${label}"><div class="t-label">${label}</div><div class="t-value">${value}</div>${note ? `<div class="t-note">${note}</div>` : ''}</div>`;
 
 /** Keep focus on the control being dragged when the widget re-renders. */
 export function keepFocus(root: HTMLElement, draw: () => void) {

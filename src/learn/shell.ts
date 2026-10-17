@@ -37,7 +37,14 @@ export function renderLearn(root: HTMLElement, slug: string | null, h: LearnHand
     <h2 id="lesson-title" tabindex="-1">${lesson.title}</h2>
     ${(lesson.intro ?? []).map((p) => `<p>${p}</p>`).join('')}
     ${lesson.predict ? `<section class="predict" aria-labelledby="predict-q"></section>` : ''}
-    ${lesson.widget ? `<section class="widget panel" aria-label="Interactive"><div id="widget"></div></section>` : ''}
+    ${
+      lesson.widget
+        ? `<section class="widget panel" aria-label="Interactive example">
+            <p class="widget-head"><span class="live-dot" aria-hidden="true"></span>Interactive: every number updates as soon as you change a control</p>
+            <div id="widget"></div>
+          </section>`
+        : ''
+    }
     ${lesson.tryThis ? `<p class="try"><strong>Try this:</strong> ${lesson.tryThis}</p>` : ''}
     ${lesson.takeaway ? `<div class="takeaway"><strong>Takeaway</strong><p>${lesson.takeaway}</p></div>` : ''}
     <nav class="lesson-pager" aria-label="Lesson navigation">
@@ -64,10 +71,12 @@ export function renderLearn(root: HTMLElement, slug: string | null, h: LearnHand
     const mount = root.querySelector<HTMLElement>('#widget')!;
     const draw = () => {
       if (!widgetParams.has(lesson.slug)) widgetParams.set(lesson.slug, widget.init());
+      const before = cardValues(mount);
       widget.render(mount, widgetParams.get(lesson.slug), (p: unknown) => {
         widgetParams.set(lesson.slug, p);
         draw();
       });
+      flashChanged(mount, before);
     };
     draw();
     root.querySelector('#open-explore')?.addEventListener('click', () =>
@@ -76,28 +85,44 @@ export function renderLearn(root: HTMLElement, slug: string | null, h: LearnHand
   }
 }
 
+/** Each metric card's current value, keyed by its label. */
+function cardValues(root: HTMLElement): Map<string, string> {
+  return new Map([...root.querySelectorAll<HTMLElement>('.tile[data-key]')].map((t) => [t.dataset.key!, t.querySelector('.t-value')?.textContent ?? '']));
+}
+
+/** Briefly highlight the values that just changed, so you can see what your control moved. */
+function flashChanged(root: HTMLElement, before: Map<string, string>): void {
+  if (before.size === 0) return; // first draw: nothing "changed"
+  for (const t of root.querySelectorAll<HTMLElement>('.tile[data-key]')) {
+    const v = t.querySelector('.t-value');
+    if (v && before.has(t.dataset.key!) && before.get(t.dataset.key!) !== v.textContent) v.classList.add('changed');
+  }
+}
+
 function layout(current: Lesson, body: string): string {
+  const done = READY.filter((l) => isDone(l.slug)).length;
   return `
     <details class="lesson-list" ${window.matchMedia("(min-width: 861px)").matches ? "open" : ""}>
-      <summary>Lessons <span class="hint">(${READY.filter((l) => isDone(l.slug)).length} of ${READY.length} done)</span></summary>
+      <summary>Lessons</summary>
+      <div class="progress">
+        <div class="progress-track" role="progressbar" aria-label="Course progress" aria-valuemin="0" aria-valuemax="${READY.length}" aria-valuenow="${done}">
+          <div class="progress-fill" style="width:${(done / READY.length) * 100}%"></div>
+        </div>
+        <span>${done} of ${READY.length} lessons completed</span>
+      </div>
       ${PARTS.map(
         (p) => `<div class="part">
           <h3>Part ${p.n}. ${p.title}</h3>
           <ol>${LESSONS.filter((l) => l.part === p.n)
             .map((l) => {
               const n = lessonNumber(l.slug);
-              const mark = l.slug === current.slug ? '●' : isDone(l.slug) ? '✓' : '';
-              const label = `<span class="n">${n}</span> ${l.title}${l.ready ? '' : ' <span class="soon">soon</span>'}`;
-              return `<li class="${l.slug === current.slug ? 'current' : ''} ${l.ready ? '' : 'not-ready'}">
-                <span class="mark" aria-hidden="true">${mark}</span>
-                ${
-                  l.ready
-                    ? `<a href="${href({ view: 'learn', lesson: l.slug })}" ${l.slug === current.slug ? 'aria-current="page"' : ''}>${label}${
-                        isDone(l.slug) ? '<span class="visually-hidden"> (done)</span>' : ''
-                      }</a>`
-                    : `<span>${label}</span>`
-                }
-              </li>`;
+              const tick = isDone(l.slug) && l.slug !== current.slug ? '<span class="done-tick" aria-hidden="true">✓</span><span class="visually-hidden"> (done)</span>' : '';
+              const label = `<span class="n">${n}</span><span>${l.title}${l.ready ? '' : ' <span class="soon">soon</span>'}</span>${tick}`;
+              return `<li class="${l.slug === current.slug ? 'current' : ''} ${l.ready ? '' : 'not-ready'}">${
+                l.ready
+                  ? `<a href="${href({ view: 'learn', lesson: l.slug })}" ${l.slug === current.slug ? 'aria-current="page"' : ''}>${label}</a>`
+                  : `<span>${label}</span>`
+              }</li>`;
             })
             .join('')}</ol>
         </div>`,

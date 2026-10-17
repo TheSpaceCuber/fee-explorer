@@ -53,6 +53,8 @@ function carryView(mount: HTMLElement, input: FundInput, view: View, stepThrough
   const result = runFund(input);
   const flows = flowsOf(input);
   mount.innerHTML = `
+    <p class="fig-caption"><strong>Each bar is one distribution</strong>, split into tiers in payment order. Hatched = paid to the GP.
+      Hover for amounts${stepThrough ? '; click a bar to step through it below' : ''}.</p>
     <div class="legend" id="cv-legend"></div>
     <div class="chart" id="cv-chart"></div>
     ${stepThrough ? '<div id="cv-steps" class="cv-steps"></div>' : ''}`;
@@ -120,9 +122,9 @@ const carrySplit: Widget<SplitP> = {
       root.innerHTML = `
         ${slider('cs-carry', 'Carry rate (GP share of profit)', p.carry, 0, 0.3, 0.05, pct(p.carry, 0))}
         <div class="tiles">
-          ${stat('LP received', money(m.distributedLp))}
+          ${stat('The GP’s first carry dollar', first ? shortDate(first.date) : 'never', 'only once the LP has its $85m back: the first yellow slice in the chart', true)}
           ${stat('GP carry paid', money(m.carryGp))}
-          ${stat('First carry dollar', first ? shortDate(first.date) : 'never', 'once the LP has its $85m back')}
+          ${stat('LP received', money(m.distributedLp))}
         </div>
         <div id="cs-view"></div>`;
       carryView(root.querySelector('#cs-view')!, input, p, false, () => {});
@@ -149,8 +151,8 @@ const hurdle: Widget<HurdleP> = {
       root.innerHTML = `
         ${slider('hd-rate', 'Hurdle rate (preferred return, per year)', p.hurdle, 0, 0.12, 0.01, pct(p.hurdle, 0))}
         <div class="tiles">
+          ${stat('GP carry paid', money(carryPaid(result), 1), p.hurdle > 0 ? `was ${money(carryPaid(none), 1)} with no hurdle: the orange pref slices are now paid first` : 'no hurdle', true)}
           ${stat('Pref paid to the LP', money(prefPaid(result), 1))}
-          ${stat('GP carry paid', money(carryPaid(result), 1), p.hurdle > 0 ? `was ${money(carryPaid(none), 1)} with no hurdle` : 'no hurdle')}
           ${stat('GP share of profit', pct(m.gpShareOfProfit), p.hurdle > 0 ? 'below 20%: no catch-up yet' : 'no hurdle: the full 20%')}
         </div>
         <div id="hd-view"></div>`;
@@ -187,9 +189,9 @@ const catchUp: Widget<CatchUpP> = {
       root.innerHTML = `
         ${segmented('cu-rate', 'Catch-up (GP share of each dollar after the pref)', [['0', 'None'], ['0.5', '50%'], ['0.8', '80%'], ['1', '100%']], String(p.catchUp))}
         <div class="tiles">
+          ${stat('GP share of total profit', pct(m.gpShareOfProfit), p.catchUp > 0 ? 'caught up to the 20% carry rate, thanks to the green catch-up slices' : 'no catch-up: stuck below its 20% carry rate', true)}
           ${stat('Catch-up paid to the GP', money(cu, 1))}
           ${stat('GP carry, paid + on unsold value', money(m.carryGp + m.accruedCarry, 1))}
-          ${stat('GP share of profit', pct(m.gpShareOfProfit), p.catchUp > 0 ? 'caught up to the 20% carry rate' : 'no catch-up: below 20%')}
         </div>
         <div id="cu-view"></div>`;
       carryView(root.querySelector('#cu-view')!, input, p, true, (v) => set({ ...p, ...v }));
@@ -220,9 +222,9 @@ const accrued: Widget<AccruedP> = {
             <span></span></div>
         </div>
         <div class="tiles pairs">
+          ${stat('LP’s share, as shown on its statement', money(m.netNav, 1), `of ${money(m.nav, 1)} still held: the rest is the GP’s accrued carry`, true)}
           ${stat('NAV (gross)', money(m.nav, 1))}
           ${stat('Accrued carry (GP, on paper)', money(m.accruedCarry, 1))}
-          ${stat('LP’s net NAV (on its statement)', money(m.netNav, 1))}
           ${stat('Net TVPI', multiple(m.tvpi), `gross of accrued carry it would be ${multiple((m.distributedLp + m.nav) / m.paidIn)}`)}
         </div>`;
       onInput(root, 'ac-nav', (v) => set({ nav: v }));
