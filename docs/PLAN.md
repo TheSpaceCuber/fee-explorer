@@ -128,7 +128,7 @@ Each milestone ends with a git commit, tests passing, and an updated `concepts.m
 | **M2** Catch-up and step-through ✅ | Catch-up at 0/50/80/100% with validation. Four compounding conventions. Step-through mode. Accrued carry on NAV. ILPA-style and catch-up-zone presets. | Hand cases include one that stops partway through catch-up. |
 | **M3** Management fees ✅ | Commitment basis, then net invested capital; quarterly in advance; funded by capital calls. Size discounts (whole/marginal), side letters, GP commitment. Gross → net bridge. | Fee schedule matches by hand; the bridge reconciles. |
 | **M4** American waterfall ✅ | Deal-by-deal with loss-recovery toggle, clawback against European, comparison chart, write-off preset. | GP keeps min(American, European) on every case. |
-| **M5** Tab 2 pipeline | Terms config → validation and approval → cash-flow ingestion → fee calc → waterfall calc run → allocation output (rounding) → reporting. JSON in/out per stage, generated rows, DDL sketches. Re-run with new terms adds a calc run instead of overwriting one. | Every row shown is generated from the engine, none hard-coded. |
+| **M5** Tab 2 pipeline ✅ | Terms config → validation and approval → cash-flow ingestion → fee calc → waterfall calc run → allocation output (rounding) → reporting. JSON in/out per stage, generated rows, DDL sketches. Re-run with new terms adds a calc run instead of overwriting one. | Every row shown is generated from the engine, none hard-coded. |
 | **M6** Public data and polish | Presets calibrated to public pension fund-level data (cited in `sources.md`, labelled as reconstructions). Net-to-gross panel: many gross outcomes fit one net IRR. Storage trade-off notes. Accessibility. GitHub Pages deploy. | |
 
 ### Illustrative tables for Tab 2
@@ -153,5 +153,9 @@ Each milestone ends with a git commit, tests passing, and an updated `concepts.m
 - NAV input. TVPI and net IRR use NAV net of accrued carry.
 - Python is used only as the XIRR oracle for now. I may write my own Python engine later, so the
   fixtures and data shapes stay language-neutral (see §0).
+- Tab 2: pure `src/pipeline/` over an append-only in-memory database; content-addressed terms
+  versions and cash-flow batches; sequential run ids with `supersedes_run_id`; idempotent runs by
+  input hash; largest-remainder rounding to cents per distribution; logical sequence numbers
+  instead of timestamps.
 - Data: hybrid. Terms are based on ILPA's model provisions. Some presets will be calibrated to
   public data (M6). Tests stay synthetic.

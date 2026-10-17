@@ -89,6 +89,7 @@ h3 { font-size: 13px; margin: 16px 0 8px; color: var(--text-secondary); text-tra
   display: grid; grid-template-columns: 364px 1fr; gap: 16px;
   padding: 0 24px 32px; max-width: 1400px; margin: 0 auto; align-items: start;
 }
+.layout[hidden] { display: none; } /* display: grid would otherwise beat the hidden attribute */
 .outputs { display: grid; gap: 16px; min-width: 0; }
 .panel {
   background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius);
@@ -249,7 +250,73 @@ tr.hypothetical td { font-style: italic; color: var(--text-secondary); font-weig
 .trace-steps p { margin: 2px 0 0; }
 .trace-steps li.idle { opacity: 0.55; }
 
+/* ---------- Tab 2 ---------- */
+.tech { display: grid; gap: 16px; padding: 0 24px 32px; max-width: 1400px; margin: 0 auto; }
+.tech[hidden] { display: none; }
+.tech p { max-width: 90ch; }
+.tech code { font-size: 12px; }
+.stale { color: var(--text-secondary); font-size: 12px; border: 1px dashed var(--border); border-radius: 6px; padding: 2px 8px; }
+.scenario-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.scenario-buttons button, .link-btn {
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); cursor: pointer;
+}
+.scenario-buttons button.primary { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.scenario-buttons button:hover, .link-btn:hover { border-color: var(--accent); }
+.link-btn { margin-top: 6px; font-size: 12px; }
+table.runs tbody tr { cursor: pointer; }
+table.runs tbody tr:hover { background: var(--surface-2); }
+table.runs tbody tr.selected { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+table.runs td, table.rows td { text-align: left; }
+.chip { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.chip.current { border-color: var(--accent); color: var(--text-primary); }
+.chip.failed, .chip.st-failed { border-color: var(--critical); }
+
+.pipeline { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 18px; }
+.pipeline li { position: relative; }
+.pipeline li:not(:last-child)::after { content: '→'; position: absolute; right: -15px; top: 40%; color: var(--text-muted); }
+.stage {
+  width: 100%; height: 100%; text-align: left; display: grid; gap: 4px; align-content: start; padding: 10px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1);
+}
+.stage:hover { border-color: var(--accent); }
+.stage.active { border-color: var(--accent); box-shadow: inset 0 -3px 0 var(--accent); background: var(--surface-2); }
+.stage-title { font-weight: 600; font-size: 13px; }
+.stage-status { font-size: 12px; color: var(--text-secondary); }
+.stage-tables { font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; word-break: break-word; }
+.stage.st-failed .stage-status, .chip.st-failed { color: var(--critical); }
+.stage.st-skipped { opacity: 0.55; }
+.stage-note { background: var(--surface-2); border-radius: 8px; padding: 8px 12px; }
+.io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+pre.json, .ddl pre {
+  margin: 0; padding: 10px 12px; background: var(--surface-0); border: 1px solid var(--grid); border-radius: 8px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; overflow: auto; max-height: 320px; white-space: pre;
+}
+.j-key { color: var(--text-primary); font-weight: 600; }
+.j-str { color: var(--text-secondary); }
+.j-num, .j-lit { color: var(--accent); }
+.table-block { margin: 10px 0 16px; }
+.table-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-bottom: 4px; }
+.table-name { font-weight: 600; font-size: 13px !important; }
+table.rows { font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+table.rows th { font-family: var(--font); }
+table.rows .null { color: var(--text-muted); font-style: italic; }
+table.rows .num { font-variant-numeric: tabular-nums; }
+.ddl { margin-top: 6px; }
+.ddl summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--grid); border-radius: 8px; padding: 12px 14px; }
+.card h3 { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-primary); margin-top: 0; }
+table.tradeoffs td, table.tradeoffs th { white-space: normal; text-align: left; vertical-align: top; }
+.sizing { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; margin-bottom: 8px; }
+
+@media (max-width: 1100px) {
+  .pipeline { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .pipeline li::after { display: none; }
+}
+
 @media (max-width: 860px) {
+  .tech { padding: 0 16px 24px; }
+  .io-grid { grid-template-columns: 1fr; }
   .site-header { padding: 16px 16px 8px; }
   .layout { grid-template-columns: 1fr; padding: 0 16px 24px; }
   .inputs { position: static; max-height: none; }

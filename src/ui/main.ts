@@ -10,6 +10,7 @@ import { renderAllocTable, renderLegend, renderLpTable, renderTiles } from './bu
 import { LAST_STEP, renderStepThrough } from './business/stepthrough';
 import { money, shortDate } from './format';
 import { fromPreset, toFundInput, type UiState } from './state';
+import { createTechnicalView } from './technical/technical';
 
 /**
  * App entry point. The flow is one direction only:
@@ -22,9 +23,19 @@ import { fromPreset, toFundInput, type UiState } from './state';
 const el = (id: string) => document.getElementById(id)!;
 let state: UiState = fromPreset(PRESETS[0]!);
 
+// Tab 2 keeps its own run history. A new preset is a different fund, so the history starts over.
+const technical = createTechnicalView(
+  el('view-technical'),
+  () => toFundInput(state),
+  () => PRESETS.find((p) => p.id === state.presetId)?.name ?? 'your custom fund',
+);
+
 function mountInputs() {
   renderInputs(el('inputs'), state, update, (next) => {
-    if (next) state = next;
+    if (next) {
+      state = next;
+      technical.reset();
+    }
     stopPlaying();
     mountInputs();
     update();
@@ -154,6 +165,24 @@ document.addEventListener('keydown', (e) => {
     update();
   }
 });
+
+// --- Tabs ---
+function showTab(which: 'business' | 'technical') {
+  el('tab-business').setAttribute('aria-selected', String(which === 'business'));
+  el('tab-technical').setAttribute('aria-selected', String(which === 'technical'));
+  el('view-business').hidden = which !== 'business';
+  el('view-technical').hidden = which !== 'technical';
+  hideTooltip();
+  if (which === 'technical') {
+    stopPlaying();
+    // Only show Tab 2 when Tab 1's inputs are valid: the pipeline would reject them anyway.
+    if (validate(toFundInput(state)).length > 0) {
+      el('view-technical').innerHTML = '<section class="panel"><p>Tab 1 has validation errors. Fix them there first, then come back.</p></section>';
+    } else technical.show();
+  } else update();
+}
+el('tab-business').addEventListener('click', () => showTab('business'));
+el('tab-technical').addEventListener('click', () => showTab('technical'));
 
 renderLegend(el('legend'));
 mountInputs();

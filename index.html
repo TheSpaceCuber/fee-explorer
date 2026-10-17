@@ -13,12 +13,12 @@
         <p class="subtitle">How a fund's distributions are split between investors (LPs) and the manager (GP). Synthetic data, $ millions.</p>
       </div>
       <nav class="tabs" role="tablist" aria-label="Views">
-        <button role="tab" aria-selected="true" id="tab-business">How the waterfall works</button>
-        <button role="tab" aria-selected="false" disabled title="Arrives in Milestone 5">How it's calculated and stored</button>
+        <button role="tab" aria-selected="true" aria-controls="view-business" id="tab-business">How the waterfall works</button>
+        <button role="tab" aria-selected="false" aria-controls="view-technical" id="tab-technical">How it's calculated and stored</button>
       </nav>
     </header>
 
-    <main class="layout" role="tabpanel" aria-labelledby="tab-business">
+    <main class="layout" id="view-business" role="tabpanel" aria-labelledby="tab-business">
       <aside class="panel inputs" id="inputs" aria-label="Fund inputs"></aside>
 
       <section class="outputs">
@@ -64,6 +64,8 @@
         </section>
       </section>
     </main>
+
+    <main class="tech" id="view-technical" role="tabpanel" aria-labelledby="tab-technical" hidden></main>
 
     <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
     <script type="module" src="/src/ui/main.ts"></script>

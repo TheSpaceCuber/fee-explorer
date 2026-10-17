@@ -282,12 +282,53 @@ goes out of range. The result is checked against `pyxirr`, which matches Excel.
 | Total cost sold ≤ total investment called | Invested capital (the fee basis) can't go negative. |
 | American: every investment call and distribution names a deal; a deal can't sell more cost than was invested in it | Otherwise there is nothing to make due. |
 
+## From terms to stored numbers (M5, Tab 2)
+
+A real fund finance system doesn't just calculate. It has to be able to say, years later, exactly
+which inputs produced a number that was sent to an investor. The pipeline in `src/pipeline/`
+shows one way to do that:
+
+| Stage | What happens | Writes |
+|---|---|---|
+| 1. Terms | LPA and side-letter terms are entered and saved as a **version** | `fund_terms`, `fee_schedule`, `partner` |
+| 2. Approval | Rules check the version, and a second person approves it | `terms_approval` |
+| 3. Ingestion | Calls and distributions are loaded as one fingerprinted **batch** | `deal`, `cash_flow_event` |
+| 4. Run | A **calc run** pins down terms version + batch + engine version | `calc_run` |
+| 5. Fees | Quarterly fees for that run | `fee_accrual` |
+| 6. Allocation | Waterfall rows per distribution × partner × tier, in cents | `waterfall_allocation`, `clawback` |
+| 7. Reporting | Published metrics that point at their run | `report_snapshot` |
+
+Ideas worth remembering:
+
+- **Content-addressed versions.** A terms version's id is a hash of the terms. Same terms → same
+  id, so "did anything change?" is a lookup. Going back to old terms finds the old version again.
+- **Append-only.** Nothing is updated or deleted. Approval is a new row. Superseding is a pointer on
+  the *new* run. "Which run is current" is a view (`v_current_run`), not a stored flag.
+- **Idempotent runs.** The run's input hash (terms + cash flows + engine) identifies the answer.
+  Running the same inputs again is detected and skipped.
+- **Per-tier rows, zeros included.** They keep the *why* (return of capital vs income), and a
+  missing row would be ambiguous.
+- **Reports point at runs.** A re-run can't silently change a number an investor already received.
+- **Atomicity.** Stages 4–6 would commit in one database transaction, so a run is never visible
+  without its results.
+
 ## Numbers and rounding
 
 The engine works in floating point and never rounds. `100 × 1.1 − 100` comes out as
-`10.000000000000014`, so tests compare with a tolerance (1e-9). Rounding to cents is a
-reporting decision. In the Tab 2 pipeline (M5), it's a separate step that keeps every
-distribution summing to the cent.
+`10.000000000000014`, so tests compare with a tolerance (1e-9). Rounding to cents happens only when
+results are stored (pipeline stage 6), using the **largest-remainder** method:
+
+1. work in cents and round every amount down,
+2. count how many cents are missing against the distribution (rounded once),
+3. give one extra cent each to the amounts that lost the most in step 1.
+
+So every distribution's rows add up to the cent, and no row moves by a whole cent or more. Rounding
+each amount on its own can be a cent off in total, which breaks reconciliations. A property test
+shows it: naive rounding fails over random amounts, even though it happens to get case B2 right.
+
+Fees are a simplification here. A real system bills fees in cents and feeds the *billed* amount
+into the waterfall. This engine keeps fees at full precision and rounds them only for storage
+(a difference of under a cent per fee line).
 
 ## Testing lesson: generators must reach the interesting cases
 

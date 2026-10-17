@@ -1,8 +1,13 @@
 # Waterfall Explorer
 
-A personal learning project for visualizing how private equity fees and distribution waterfalls
-work. It's a static site: the waterfall engine runs in the browser, with no backend.
-All data is synthetic.
+A personal learning project for visualizing how management fees and distribution waterfalls work
+in closed-ended private equity funds. It's a static site: the engine runs in the browser, with no
+backend. All data is synthetic.
+
+- **Tab 1, how the waterfall works:** inputs, tier chart, step-through, gross-to-net bridge, fees,
+  European vs American with clawback.
+- **Tab 2, how it's calculated and stored:** an illustrative pipeline from terms to stored rows,
+  with JSON, DDL and generated rows for every stage, and re-runs that never overwrite history.
 
 - **Plan and milestones:** [docs/PLAN.md](docs/PLAN.md)
 - **Concepts, in plain English:** [docs/concepts.md](docs/concepts.md)
@@ -30,6 +35,7 @@ python -m venv .venv
 | Path | What |
 |---|---|
 | `src/engine/` | Pure waterfall engine: no DOM, no clock. The UI imports only `src/engine/index.ts`. |
+| `src/pipeline/` | Pure Tab 2 pipeline: terms → approval → cash flows → run → fees → allocations → reports, into append-only tables. |
 | `src/ui/` | Plain TypeScript and SVG. State → engine → render. |
 | `src/scenarios/` | Preset funds. |
 | `tests/fixtures/` | Language-neutral expected results (JSON), shared with any future engine. |
