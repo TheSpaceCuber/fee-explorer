@@ -86,7 +86,7 @@ h3 { font-size: 13px; margin: 16px 0 8px; color: var(--text-secondary); text-tra
 .tabs button:disabled { color: var(--text-muted); cursor: not-allowed; }
 
 .layout {
-  display: grid; grid-template-columns: 340px 1fr; gap: 16px;
+  display: grid; grid-template-columns: 364px 1fr; gap: 16px;
   padding: 0 24px 32px; max-width: 1400px; margin: 0 auto; align-items: start;
 }
 .outputs { display: grid; gap: 16px; min-width: 0; }
@@ -121,7 +121,13 @@ input[type='number'], input[type='date'], input[type='text'], select {
 
 .rows { display: grid; gap: 6px; }
 .row { display: grid; grid-template-columns: 1fr 90px 28px; gap: 6px; align-items: center; }
-.row.lp { grid-template-columns: 1fr 70px 28px; }
+.row.lp { grid-template-columns: 1fr 50px 92px 28px; }
+.row.dist { grid-template-columns: 1fr 62px 62px 28px; }
+.row select { padding: 5px 4px; font-size: 12px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pair[hidden], .fee-fields[hidden] { display: none; }
+.check { display: flex; gap: 8px; align-items: center; font-weight: 600; margin-bottom: 10px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
 .icon-btn {
   border: 1px solid var(--border); background: var(--surface-1); border-radius: 6px; cursor: pointer;
   height: 30px; color: var(--text-secondary);
@@ -213,6 +219,20 @@ tfoot td { font-weight: 600; border-bottom: none; }
 }
 tr.hypothetical td { font-style: italic; color: var(--text-secondary); font-weight: 400; }
 .tooltip .tt-hint { color: var(--text-muted); margin-top: 4px; }
+.tooltip .tt-sub { color: var(--text-muted); font-size: 11px; margin: -2px 0 4px; }
+
+/* ---------- Fees and bridge ---------- */
+.chart .axis-label { fill: var(--text-secondary); font-size: 11px; }
+.chart .fee-col { fill: var(--tier-pref); }
+.chart .hit { fill: transparent; }
+.chart .hit:hover { fill: var(--surface-2); fill-opacity: 0.5; }
+.chart .connector { stroke: var(--border); stroke-width: 1; }
+.irr-steps { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 12px 0 4px; }
+.irr-steps > div:not(.arrow) { display: grid; padding: 8px 12px; border: 1px solid var(--grid); border-radius: 8px; min-width: 120px; }
+.irr-steps strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.irr-steps .t-label { color: var(--text-secondary); font-size: 12px; }
+.irr-steps .t-note { color: var(--text-muted); font-size: 12px; }
+.irr-steps .arrow { color: var(--text-muted); font-size: 18px; }
 
 /* ---------- Trace ---------- */
 .trace-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

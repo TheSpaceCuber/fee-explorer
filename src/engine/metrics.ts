@@ -1,64 +1,100 @@
-import type { FundInput, WaterfallResult } from './types';
-import { xirr, type DatedFlow } from './xirr';
+import type { DatedFlow, FundInput, PartnerResult, WaterfallResult } from './types';
+import { xirr } from './xirr';
 
 /**
- * Fund performance from the LP's point of view (net of carry).
+ * Fund performance.
  *
- * - Paid-in: everything the LPs contributed (investment + fees).
- * - DPI (distributions / paid-in): cash actually back in LPs' pockets per $1 paid in. "Realized."
- * - TVPI (total value / paid-in): DPI plus the LPs' share of what the fund still holds.
- *   "Realized + unrealized." TVPI = DPI when there's no NAV left.
- * - Net IRR: XIRR of the LP cash flows, with net NAV treated as if paid out on its date.
+ * LP metrics (what an LP's report shows) cover partners with role 'LP' only. The GP's own
+ * commitment is left out, as in real LP reporting.
  *
- * "Net NAV" = NAV minus accrued carry: the carry the GP would take if the NAV were sold today
- * (see the hypothetical liquidation in partners.ts). It's what an LP's capital account shows.
+ * - Paid-in: everything the LPs contributed, investment + management fees.
+ * - DPI (distributions / paid-in): cash back per $1 paid in. "Realized."
+ * - TVPI (total value / paid-in): DPI plus the LPs' share of the NAV, net of accrued carry.
+ * - Net IRR: XIRR of the LPs' cash flows, with net NAV as a final flow. Net of fees and carry.
+ *
+ * The bridge (fund level, all partners) explains where the gross profit went:
+ *
+ *     gross profit  = distributions + NAV − investment called
+ *   − management fees
+ *   − carry paid
+ *   − accrued carry (on the NAV)
+ *   = net profit to partners
+ *
+ * This always adds up, because every dollar of distributions goes either to partners or to carry,
+ * and fees are money partners paid in on top of the investment. A property test checks it against
+ * the partners' own ledgers.
  */
+export interface Bridge {
+  investment: number;
+  distributions: number;
+  nav: number;
+  grossProfit: number;
+  fees: number;
+  carryPaid: number;
+  accruedCarry: number;
+  netProfit: number;
+  /** (distributions + NAV) / investment: the deals' own multiple. */
+  grossMoic: number | null;
+  /** IRR of the deals: −investment calls, +distributions, +NAV. */
+  grossIrr: number | null;
+  /** IRR after fees but before carry: −(investment + fees), +distributions, +NAV. */
+  irrAfterFees: number | null;
+}
+
 export interface FundMetrics {
   paidIn: number;
+  fees: number;
   distributedLp: number;
   carryGp: number;
   /** NAV before accrued carry. */
   nav: number;
   /** Carry the GP would earn if the NAV were realized on its date. */
   accruedCarry: number;
-  /** NAV after accrued carry: the LPs' share. */
+  /** The LPs' share of the NAV, after accrued carry. */
   netNav: number;
   dpi: number | null;
   tvpi: number | null;
   irr: number | null;
   /**
-   * GP share of total profit: (carry paid + accrued) / (all distributions + NAV − paid-in).
-   * With a full catch-up this reaches the carry rate once the GP is caught up. Without one it
-   * stays below. null when there is no profit.
+   * GP share of the carry-bearing partners' profit (after fees): (carry paid + accrued) / profit.
+   * Reaches the carry rate once the GP has fully caught up. null when there is no profit.
    */
   gpShareOfProfit: number | null;
+  bridge: Bridge;
 }
 
-export function lpCashFlows(input: FundInput, result: WaterfallResult): DatedFlow[] {
-  const flows: DatedFlow[] = [];
-  for (const e of input.events) {
-    if (e.kind === 'capital_call') {
-      flows.push({ date: e.date, amount: -(e.investment + e.fee) });
-    } else {
-      const lp = result.allocations.filter((a) => a.eventId === e.id).reduce((s, a) => s + a.lp, 0);
-      flows.push({ date: e.date, amount: lp });
-    }
-  }
-  const netNav = result.liquidation?.lp ?? 0;
+const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+const liqLp = (p: PartnerResult) => sum(p.liquidation?.steps.map((s) => s.lp) ?? []);
+const liqGp = (p: PartnerResult) => sum(p.liquidation?.steps.map((s) => s.gp) ?? []);
+
+/** Cash flows of the given partners, with each one's net NAV as a final flow. */
+export function partnersCashFlows(input: FundInput, partners: PartnerResult[]): DatedFlow[] {
+  const flows = partners.flatMap((p) => p.flows);
+  const netNav = sum(partners.map(liqLp));
   if (input.nav && netNav > 0) flows.push({ date: input.nav.date, amount: netNav });
   return flows;
 }
 
+/** LP investors' cash flows (GP commitment excluded). */
+export function lpCashFlows(input: FundInput, result: WaterfallResult): DatedFlow[] {
+  return partnersCashFlows(input, result.partners.filter((p) => p.role === 'LP'));
+}
+
 export function computeMetrics(input: FundInput, result: WaterfallResult): FundMetrics {
-  const paidIn = input.events.reduce((s, e) => (e.kind === 'capital_call' ? s + e.investment + e.fee : s), 0);
-  const distributedLp = result.allocations.reduce((s, a) => s + a.lp, 0);
-  const carryGp = result.allocations.reduce((s, a) => s + a.gp, 0);
+  const lps = result.partners.filter((p) => p.role === 'LP');
+  const paidIn = sum(lps.map((p) => p.ledger.contributed));
+  const distributedLp = sum(lps.map((p) => p.ledger.distributedLp));
+  const netNav = sum(lps.map(liqLp));
   const nav = input.nav?.amount ?? 0;
-  const accruedCarry = result.liquidation?.gp ?? 0;
-  const netNav = nav - accruedCarry;
-  const profit = distributedLp + carryGp + nav - paidIn;
+  const carryGp = sum(result.partners.map((p) => p.ledger.distributedGp));
+  const accruedCarry = sum(result.partners.map(liqGp));
+
+  // GP share of profit, over the partners that pay carry.
+  const profit = sum(lps.map((p) => p.ledger.distributedLp + p.ledger.distributedGp + p.share * nav - p.ledger.contributed));
+
   return {
     paidIn,
+    fees: sum(lps.flatMap((p) => p.fees.map((f) => f.amount))),
     distributedLp,
     carryGp,
     nav,
@@ -68,5 +104,39 @@ export function computeMetrics(input: FundInput, result: WaterfallResult): FundM
     tvpi: paidIn > 0 ? (distributedLp + netNav) / paidIn : null,
     irr: xirr(lpCashFlows(input, result)),
     gpShareOfProfit: profit > 1e-9 ? (carryGp + accruedCarry) / profit : null,
+    bridge: computeBridge(input, result),
+  };
+}
+
+export function computeBridge(input: FundInput, result: WaterfallResult): Bridge {
+  const investmentFlows: DatedFlow[] = [];
+  const outFlows: DatedFlow[] = [];
+  for (const e of input.events) {
+    if (e.kind === 'capital_call') investmentFlows.push({ date: e.date, amount: -e.investment });
+    else outFlows.push({ date: e.date, amount: e.amount });
+  }
+  const nav = input.nav?.amount ?? 0;
+  if (input.nav && nav > 0) outFlows.push({ date: input.nav.date, amount: nav });
+
+  const investment = -sum(investmentFlows.map((f) => f.amount));
+  const distributions = sum(input.events.map((e) => (e.kind === 'distribution' ? e.amount : 0)));
+  const fees = sum(result.fees.map((f) => f.amount));
+  const carryPaid = sum(result.allocations.map((a) => a.gp));
+  const accruedCarry = result.liquidation?.gp ?? 0;
+  const grossProfit = distributions + nav - investment;
+  const feeFlows = result.fees.map((f) => ({ date: f.date, amount: -f.amount }));
+
+  return {
+    investment,
+    distributions,
+    nav,
+    grossProfit,
+    fees,
+    carryPaid,
+    accruedCarry,
+    netProfit: grossProfit - fees - carryPaid - accruedCarry,
+    grossMoic: investment > 0 ? (distributions + nav) / investment : null,
+    grossIrr: xirr([...investmentFlows, ...outFlows]),
+    irrAfterFees: xirr([...investmentFlows, ...feeFlows, ...outFlows]),
   };
 }

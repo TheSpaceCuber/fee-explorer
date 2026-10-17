@@ -1,9 +1,13 @@
 import { applyEvent, runEuropean } from './carry/european';
+import { feeCalls, mergeFeeCalls, partnerFees } from './fees/managementFee';
 import {
   TIERS,
+  type CarryTerms,
+  type DatedFlow,
   type FundAllocation,
   type FundEvent,
   type FundInput,
+  type Partner,
   type PartnerResult,
   type TierAllocation,
   type WaterfallResult,
@@ -17,10 +21,16 @@ export const LIQUIDATION_ID = '__liquidation__';
  * Run the waterfall for every partner, then add them up.
  *
  * Why per partner instead of running once at fund level and splitting pro rata?
- * With identical terms both give the same answer (case A7 and a property test check this). From
- * M3, LPs can pay different management fees. Then they have contributed different amounts, their
- * hurdle accounts differ, and so does the carry they pay. Fund administrators handle this by
- * running the waterfall on each partner's own capital account.
+ * Partners can pay different management fees (size discounts, side letters, the GP's own
+ * commitment pays none). Then they have contributed different amounts, their hurdle accounts
+ * differ, and so does the carry they pay. Fund administrators handle this by running the
+ * waterfall on each partner's own capital account. Hand-worked cases F3–F5 show the divergence.
+ *
+ * Per partner:
+ *   1. take its commitment share of every fund-level investment call and distribution,
+ *   2. work out its quarterly management fees and turn them into extra capital calls,
+ *   3. run the waterfall on the combined, date-ordered events,
+ *   4. optionally run a hypothetical liquidation of its share of the NAV.
  */
 export function runFund(input: FundInput): WaterfallResult {
   assertValid(input);
@@ -29,8 +39,11 @@ export function runFund(input: FundInput): WaterfallResult {
 
   const runs = input.partners.map((p) => {
     const share = p.commitment / total;
-    const events = input.events.map((e) => scaleEvent(e, share));
-    const run = runEuropean(input.terms, p.id, events);
+    const terms = termsFor(input.terms, p);
+    const base = input.events.map((e) => scaleEvent(e, share));
+    const fees = partnerFees(input.fees, p, base, input.nav?.date);
+    const events = mergeFeeCalls(base, feeCalls(fees));
+    const run = runEuropean(terms, p.id, events);
 
     /*
      * Hypothetical liquidation: "if the fund sold everything at NAV today, who would get what?"
@@ -43,18 +56,21 @@ export function runFund(input: FundInput): WaterfallResult {
     let liquidationRows: TierAllocation[] = [];
     if (input.nav) {
       const pretend: FundEvent = { id: LIQUIDATION_ID, kind: 'distribution', date: input.nav.date, amount: input.nav.amount * share };
-      const step = applyEvent(input.terms, p.id, run.ledger, pretend, 'liquidation');
+      const step = applyEvent(terms, p.id, run.ledger, pretend, 'liquidation');
       liquidation = step.trace;
       liquidationRows = step.allocations;
     }
 
     const result: PartnerResult = {
       partnerId: p.id,
+      role: p.role,
       share,
       allocations: run.allocations,
       trace: run.trace,
       ledger: run.ledger,
       liquidation,
+      fees,
+      flows: partnerFlows(events, run.allocations),
     };
     return { result, liquidationRows };
   });
@@ -73,14 +89,33 @@ export function runFund(input: FundInput): WaterfallResult {
       gp: liquidationAllocations.reduce((s, a) => s + a.gp, 0),
       allocations: liquidationAllocations,
     },
+    fees: partners.flatMap((p) => p.fees).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
   };
+}
+
+/**
+ * The GP's own commitment pays no carry: it would be paying itself. Running the same waterfall
+ * with carry and catch-up at 0 sends every dollar of it back to the GP-as-investor.
+ */
+function termsFor(terms: CarryTerms, p: Partner): CarryTerms {
+  return p.role === 'GP' ? { ...terms, carryRate: 0, catchUpRate: 0 } : terms;
 }
 
 /** A partner's slice of a fund-level event. */
 function scaleEvent(e: FundEvent, share: number): FundEvent {
-  return e.kind === 'capital_call'
-    ? { ...e, investment: e.investment * share, fee: e.fee * share }
-    : { ...e, amount: e.amount * share };
+  if (e.kind === 'capital_call') return { ...e, investment: e.investment * share, fee: e.fee * share };
+  const scaled: FundEvent = { ...e, amount: e.amount * share };
+  if (e.costRealized !== undefined) scaled.costRealized = e.costRealized * share;
+  return scaled;
+}
+
+/** Calls negative (investment + fee), distributions positive (what the partner itself received). */
+function partnerFlows(events: FundEvent[], allocations: TierAllocation[]): DatedFlow[] {
+  return events.map((e) =>
+    e.kind === 'capital_call'
+      ? { date: e.date, amount: -(e.investment + e.fee) }
+      : { date: e.date, amount: allocations.filter((a) => a.eventId === e.id).reduce((s, a) => s + a.lp, 0) },
+  );
 }
 
 /** Sum partner allocations into one row per (event, tier), zero rows included. */

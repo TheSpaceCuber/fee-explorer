@@ -1,6 +1,6 @@
 import { PRESETS } from '../../scenarios/presets';
 import { esc } from '../format';
-import { fromPreset, newId, type Flow, type UiState } from '../state';
+import { fromPreset, newId, PARTNER_TYPES, type Flow, type PartnerType, type UiState } from '../state';
 
 /**
  * The inputs panel.
@@ -8,8 +8,8 @@ import { fromPreset, newId, type Flow, type UiState } from '../state';
  * Two kinds of change:
  *  - Editing a value (slider, amount, date) mutates the state and calls `onChange`. Only the
  *    outputs re-render, so the field you're typing in keeps focus.
- *  - Adding or removing a row, or switching preset, changes the panel's structure. Then the whole
- *    panel re-renders through `onStructure`.
+ *  - Adding or removing a row, switching preset, or turning fees on/off changes the panel's
+ *    structure. Then the whole panel re-renders through `onStructure`.
  */
 export function renderInputs(
   root: HTMLElement,
@@ -19,6 +19,8 @@ export function renderInputs(
 ): void {
   const preset = PRESETS.find((p) => p.id === state.presetId);
   const t = state.terms;
+  const f = state.fees;
+  const pctFmt = (x: number, d = 2) => `${(x * 100).toFixed(d)}%`;
 
   root.innerHTML = `
     <div class="field">
@@ -30,17 +32,9 @@ export function renderInputs(
       <p class="hint">${preset ? esc(preset.blurb) : 'You have edited the scenario.'}</p>
     </div>
 
-    <h3>Terms</h3>
-    <div class="field">
-      <label for="hurdle">Hurdle rate (preferred return) <span class="value" id="hurdle-v"></span></label>
-      <input type="range" id="hurdle" min="0" max="0.15" step="0.0025" value="${t.hurdleRate}">
-      <p class="hint">The annual return LPs must earn before the GP gets any carry.</p>
-    </div>
-    <div class="field">
-      <label for="carry">Carry rate <span class="value" id="carry-v"></span></label>
-      <input type="range" id="carry" min="0" max="0.3" step="0.01" value="${t.carryRate}">
-      <p class="hint">The GP's share of profit above the hurdle.</p>
-    </div>
+    <h3>Carry terms</h3>
+    ${slider('hurdle', 'Hurdle rate (preferred return)', t.hurdleRate, 0, 0.15, 0.0025, 'The annual return LPs must earn before the GP gets any carry.')}
+    ${slider('carry', 'Carry rate', t.carryRate, 0, 0.3, 0.01, "The GP's share of profit above the hurdle.")}
     ${segmented('Pref compounding', 'compounding', [['simple', 'Simple'], ['annual', 'Annual'], ['quarterly', 'Quarterly'], ['daily', 'Daily']], t.compounding, [])}
     <p class="hint">Simple: only capital earns the hurdle. Compound: unpaid pref earns it too, so more pref is owed.</p>
     ${segmented('GP catch-up', 'catchup', [['0', 'None'], ['0.5', '50%'], ['0.8', '80%'], ['1', '100%']], String(t.catchUpRate), [])}
@@ -48,27 +42,55 @@ export function renderInputs(
     ${segmented('Structure', 'structure', [['european', 'European'], ['american', 'American']], t.structure, ['american'])}
     <p class="hint">American (deal-by-deal) arrives in M4.</p>
 
-    <h3>LPs <span class="hint">(name, commitment)</span></h3>
-    <div class="rows" id="lps">
+    <h3>Management fees</h3>
+    <label class="check"><input type="checkbox" id="fees-on" ${f.enabled ? 'checked' : ''}> Charge management fees</label>
+    <div class="fee-fields" ${f.enabled ? '' : 'hidden'}>
+      <div class="pair">
+        <div class="field"><label for="fee-start">Fees start</label><input type="date" id="fee-start" value="${f.start}"></div>
+        <div class="field"><label for="fee-ip-end">Investment period ends</label><input type="date" id="fee-ip-end" value="${f.ipEnd}"></div>
+      </div>
+      ${slider('fee-ip-rate', 'Rate during investment period (on commitment)', f.ipRate, 0, 0.025, 0.00125)}
+      ${slider('fee-post-rate', 'Rate afterwards', f.postRate, 0, 0.025, 0.00125)}
+      ${segmented('Basis afterwards', 'fee-basis', [['invested_capital', 'Invested capital'], ['commitment', 'Commitment']], f.postBasis, [])}
+      <div class="field"><label for="fee-end">Fees end</label><input type="date" id="fee-end" value="${f.end}"></div>
+      <p class="hint">Billed quarterly in advance and paid by calling capital, so fees are returned in ROC and earn pref.
+        "Invested capital" = investment called − cost of what's been sold, so the fee falls as deals exit.</p>
+      ${segmented('Size discount', 'fee-discount', [['none', 'None'], ['whole', 'Whole'], ['marginal', 'Marginal']], f.discountMode, [])}
+      <div class="pair" ${f.discountMode === 'none' ? 'hidden' : ''}>
+        <div class="field"><label for="fee-disc-min">Commitment ≥ ($m)</label><input type="number" id="fee-disc-min" min="0" step="1" value="${f.discountMin}"></div>
+        <div class="field"><label for="fee-disc-cut">Rate cut (%)</label><input type="number" id="fee-disc-cut" min="0" step="0.05" value="${+(f.discountCut * 100).toFixed(3)}"></div>
+      </div>
+      <p class="hint">Whole: the whole commitment gets the lower rate. Marginal: only the part above the threshold does, like tax brackets.</p>
+      ${slider('fee-side-cut', 'Side-letter rate cut', f.sideLetterCut, 0, 0.01, 0.00125, 'Applies to LPs set to "Side letter" below.')}
+    </div>
+
+    <h3>Partners <span class="hint">(name, commitment $m, type)</span></h3>
+    <div class="rows">
       ${state.partners
         .map(
           (p, i) => `<div class="row lp">
-            <input type="text" aria-label="LP name" data-lp-name="${i}" value="${esc(p.id)}">
+            <input type="text" aria-label="Partner name" data-lp-name="${i}" value="${esc(p.id)}">
             <input type="number" aria-label="Commitment" data-lp-commit="${i}" min="0" step="1" value="${p.commitment}">
+            <select aria-label="Partner type" data-lp-type="${i}">
+              ${PARTNER_TYPES.map(([v, , short]) => `<option value="${v}" ${v === p.type ? 'selected' : ''}>${short}</option>`).join('')}
+            </select>
             <button class="icon-btn" data-lp-remove="${i}" aria-label="Remove ${esc(p.id)}" ${state.partners.length === 1 ? 'disabled' : ''}>✕</button>
           </div>`,
         )
         .join('')}
     </div>
-    <button class="add-btn" id="lp-add">+ Add LP</button>
+    <button class="add-btn" id="lp-add">+ Add partner</button>
+    <p class="hint">"GP commitment" is the manager investing its own money alongside the LPs. It pays no fees and no carry, and is left out of LP metrics.</p>
 
-    <h3>Capital calls <span class="hint">(date, $m)</span></h3>
+    <h3>Investment calls <span class="hint">(date, $m)</span></h3>
     ${flowRows('calls', state.calls)}
     <button class="add-btn" data-flow-add="calls">+ Add capital call</button>
+    ${f.enabled ? '<p class="hint">Fee calls are added automatically from the fee schedule.</p>' : ''}
 
-    <h3>Distributions <span class="hint">(date, $m)</span></h3>
+    <h3>Distributions <span class="hint">(date, $m, cost sold $m)</span></h3>
     ${flowRows('dists', state.dists)}
     <button class="add-btn" data-flow-add="dists">+ Add distribution</button>
+    <p class="hint">"Cost sold" is what the fund originally paid for the investments it sold. It only matters for fees on invested capital.</p>
 
     <h3>Remaining value</h3>
     <div class="row">
@@ -76,7 +98,7 @@ export function renderInputs(
       <input type="number" aria-label="NAV amount" id="nav-amount" min="0" step="1" value="${state.nav.amount}">
       <span></span>
     </div>
-    <p class="hint">What the fund still holds (NAV). TVPI and IRR use it net of the carry the GP would earn if it were sold (accrued carry). Set it to 0 for a fully realized fund.</p>
+    <p class="hint">What the fund still holds (NAV). TVPI and IRR use it net of the carry the GP would earn if it were sold (accrued carry). Fees stop on this date. Set it to 0 for a fully realized fund.</p>
   `;
 
   const $ = <T extends HTMLElement>(sel: string) => root.querySelector<T>(sel)!;
@@ -85,12 +107,15 @@ export function renderInputs(
   const edited = () => {
     if (state.presetId !== 'custom') {
       state.presetId = 'custom';
-      const select = $<HTMLSelectElement>('#preset');
-      select.add(new Option('Custom', 'custom', true, true));
+      $<HTMLSelectElement>('#preset').add(new Option('Custom', 'custom', true, true));
       const hint = root.querySelector('#preset + .hint');
       if (hint) hint.textContent = 'You have edited the scenario.';
     }
     onChange();
+  };
+  const structural = () => {
+    state.presetId = 'custom';
+    onStructure();
   };
 
   // --- Preset ---
@@ -99,38 +124,58 @@ export function renderInputs(
     if (p) onStructure(fromPreset(p));
   });
 
-  // --- Sliders ---
-  const showSliders = () => {
-    $('#hurdle-v').textContent = `${(state.terms.hurdleRate * 100).toFixed(2)}%`;
-    $('#carry-v').textContent = `${(state.terms.carryRate * 100).toFixed(0)}%`;
+  // --- Sliders: each shows its value and writes one field ---
+  const bindSlider = (id: string, set: (v: number) => void, get: () => number) => {
+    const input = $<HTMLInputElement>(`#${id}`);
+    const show = () => ($(`#${id}-v`).textContent = pctFmt(get()));
+    show();
+    input.addEventListener('input', () => {
+      set(Number(input.value));
+      show();
+      edited();
+    });
   };
-  showSliders();
-  $<HTMLInputElement>('#hurdle').addEventListener('input', (e) => {
-    state.terms.hurdleRate = Number((e.target as HTMLInputElement).value);
-    showSliders();
-    edited();
-  });
-  $<HTMLInputElement>('#carry').addEventListener('input', (e) => {
-    state.terms.carryRate = Number((e.target as HTMLInputElement).value);
-    showSliders();
-    edited();
+  bindSlider('hurdle', (v) => (state.terms.hurdleRate = v), () => state.terms.hurdleRate);
+  bindSlider('carry', (v) => (state.terms.carryRate = v), () => state.terms.carryRate);
+  bindSlider('fee-ip-rate', (v) => (f.ipRate = v), () => f.ipRate);
+  bindSlider('fee-post-rate', (v) => (f.postRate = v), () => f.postRate);
+  bindSlider('fee-side-cut', (v) => (f.sideLetterCut = v), () => f.sideLetterCut);
+
+  // --- Radio groups ---
+  const bindRadio = (name: string, set: (v: string) => void, structure = false) =>
+    root.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((el) =>
+      el.addEventListener('change', () => {
+        set(el.value);
+        if (structure) structural();
+        else edited();
+      }),
+    );
+  bindRadio('compounding', (v) => (state.terms.compounding = v as typeof state.terms.compounding));
+  bindRadio('catchup', (v) => (state.terms.catchUpRate = Number(v)));
+  bindRadio('fee-basis', (v) => (f.postBasis = v as typeof f.postBasis));
+  bindRadio('fee-discount', (v) => (f.discountMode = v as typeof f.discountMode), true);
+
+  // --- Plain fields ---
+  const bindField = (id: string, set: (el: HTMLInputElement) => void) => {
+    const el = $<HTMLInputElement>(`#${id}`);
+    el.addEventListener('input', () => {
+      set(el);
+      edited();
+    });
+  };
+  bindField('fee-start', (el) => (f.start = el.value));
+  bindField('fee-ip-end', (el) => (f.ipEnd = el.value));
+  bindField('fee-end', (el) => (f.end = el.value));
+  bindField('fee-disc-min', (el) => (f.discountMin = el.valueAsNumber || 0));
+  bindField('fee-disc-cut', (el) => (f.discountCut = (el.valueAsNumber || 0) / 100));
+  bindField('nav-date', (el) => (state.nav.date = el.value));
+  bindField('nav-amount', (el) => (state.nav.amount = el.valueAsNumber || 0));
+  $<HTMLInputElement>('#fees-on').addEventListener('change', (e) => {
+    f.enabled = (e.target as HTMLInputElement).checked;
+    structural();
   });
 
-  // --- Compounding and catch-up (radio groups) ---
-  root.querySelectorAll<HTMLInputElement>('input[name="compounding"]').forEach((el) =>
-    el.addEventListener('change', () => {
-      state.terms.compounding = el.value as typeof state.terms.compounding;
-      edited();
-    }),
-  );
-  root.querySelectorAll<HTMLInputElement>('input[name="catchup"]').forEach((el) =>
-    el.addEventListener('change', () => {
-      state.terms.catchUpRate = Number(el.value);
-      edited();
-    }),
-  );
-
-  // --- LPs ---
+  // --- Partners ---
   root.querySelectorAll<HTMLInputElement>('[data-lp-name]').forEach((el) =>
     el.addEventListener('input', () => {
       state.partners[Number(el.dataset.lpName)]!.id = el.value;
@@ -143,17 +188,21 @@ export function renderInputs(
       edited();
     }),
   );
+  root.querySelectorAll<HTMLSelectElement>('[data-lp-type]').forEach((el) =>
+    el.addEventListener('change', () => {
+      state.partners[Number(el.dataset.lpType)]!.type = el.value as PartnerType;
+      edited();
+    }),
+  );
   root.querySelectorAll<HTMLButtonElement>('[data-lp-remove]').forEach((el) =>
     el.addEventListener('click', () => {
       state.partners.splice(Number(el.dataset.lpRemove), 1);
-      state.presetId = 'custom';
-      onStructure();
+      structural();
     }),
   );
   $('#lp-add').addEventListener('click', () => {
-    state.partners.push({ id: `LP ${state.partners.length + 1}`, role: 'LP', commitment: 10 });
-    state.presetId = 'custom';
-    onStructure();
+    state.partners.push({ id: `LP ${state.partners.length + 1}`, commitment: 10, type: 'standard' });
+    structural();
   });
 
   // --- Calls and distributions ---
@@ -162,6 +211,7 @@ export function renderInputs(
       el.addEventListener('input', () => {
         const row = state[key][Number(el.dataset.i)]!;
         if (el.type === 'date') row.date = el.value;
+        else if (el.dataset.field === 'cost') row.cost = el.valueAsNumber || 0;
         else row.amount = el.valueAsNumber;
         edited();
       }),
@@ -169,27 +219,25 @@ export function renderInputs(
     root.querySelectorAll<HTMLButtonElement>(`[data-flow-remove="${key}"]`).forEach((el) =>
       el.addEventListener('click', () => {
         state[key].splice(Number(el.dataset.i), 1);
-        state.presetId = 'custom';
-        onStructure();
+        structural();
       }),
     );
     $(`[data-flow-add="${key}"]`).addEventListener('click', () => {
       const last = state[key].at(-1);
-      state[key].push({ id: newId(key === 'calls' ? 'call' : 'dist'), date: nextYear(last?.date), amount: 10 });
-      state.presetId = 'custom';
-      onStructure();
+      const row: Flow = { id: newId(key === 'calls' ? 'call' : 'dist'), date: nextYear(last?.date), amount: 10 };
+      if (key === 'dists') row.cost = 0;
+      state[key].push(row);
+      structural();
     });
   }
+}
 
-  // --- NAV ---
-  $<HTMLInputElement>('#nav-date').addEventListener('input', (e) => {
-    state.nav.date = (e.target as HTMLInputElement).value;
-    edited();
-  });
-  $<HTMLInputElement>('#nav-amount').addEventListener('input', (e) => {
-    state.nav.amount = (e.target as HTMLInputElement).valueAsNumber || 0;
-    edited();
-  });
+function slider(id: string, label: string, value: number, min: number, max: number, step: number, hint?: string) {
+  return `<div class="field">
+    <label for="${id}">${label} <span class="value" id="${id}-v"></span></label>
+    <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}">
+    ${hint ? `<p class="hint">${hint}</p>` : ''}
+  </div>`;
 }
 
 function segmented(label: string, name: string, options: [string, string][], current: string, disabled: string[]) {
@@ -210,9 +258,10 @@ function segmented(label: string, name: string, options: [string, string][], cur
 function flowRows(key: 'calls' | 'dists', flows: Flow[]) {
   return `<div class="rows">${flows
     .map(
-      (f, i) => `<div class="row">
+      (f, i) => `<div class="row ${key === 'dists' ? 'dist' : ''}">
         <input type="date" aria-label="Date" data-flow="${key}" data-i="${i}" value="${f.date}">
         <input type="number" aria-label="Amount" data-flow="${key}" data-i="${i}" min="0" step="1" value="${f.amount}">
+        ${key === 'dists' ? `<input type="number" aria-label="Cost sold" data-flow="${key}" data-field="cost" data-i="${i}" min="0" step="1" value="${f.cost ?? 0}">` : ''}
         <button class="icon-btn" data-flow-remove="${key}" data-i="${i}" aria-label="Remove row">✕</button>
       </div>`,
     )

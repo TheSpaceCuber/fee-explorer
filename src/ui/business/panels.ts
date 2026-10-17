@@ -1,6 +1,6 @@
-import type { FundMetrics, PartnerResult, WaterfallResult } from '../../engine';
+import { partnersCashFlows, xirr, type FundInput, type FundMetrics, type PartnerResult, type WaterfallResult } from '../../engine';
 import { esc, money, multiple, pct, shortDate } from '../format';
-import type { Flow, UiState } from '../state';
+import { PARTNER_TYPES, type Flow, type UiState } from '../state';
 import { piecesFor, TIER_STYLE } from './chart';
 
 /** Headline numbers. One tile per metric, with a one-line note on what it means. */
@@ -15,13 +15,14 @@ export function renderTiles(root: HTMLElement, m: FundMetrics, state: UiState): 
   }
 
   const tiles: [string, string, string][] = [
-    ['Paid in', money(m.paidIn), 'Capital the LPs contributed'],
+    ['Paid in', money(m.paidIn), m.fees > 0 ? `Includes ${money(m.fees)} of fees` : 'Capital the LPs contributed'],
     ['Distributed to LPs', money(m.distributedLp), 'Cash back, after carry'],
+    ['Management fees', money(m.fees), m.fees > 0 ? `${pct(m.fees / m.paidIn)} of paid-in` : 'Fees are off'],
     ['GP carry paid', money(m.carryGp), m.accruedCarry > 0 ? `+ ${money(m.accruedCarry)} accrued on NAV` : 'Cash actually paid to the GP'],
     ['GP share of profit', pct(share), shareNote],
     ['DPI', multiple(m.dpi), 'Cash back per $1 paid in'],
     ['TVPI', multiple(m.tvpi), m.nav > 0 ? `Includes ${money(m.netNav)} net NAV` : 'Same as DPI: no NAV left'],
-    ['Net IRR', pct(m.irr), 'LP cash flows, after carry (XIRR)'],
+    ['Net IRR', pct(m.irr), `LPs, after fees and carry · gross ${pct(m.bridge.grossIrr)}`],
   ];
   root.innerHTML = tiles
     .map(([label, value, note]) => `<div class="tile"><div class="t-label">${label}</div><div class="t-value">${value}</div><div class="t-note">${note}</div></div>`)
@@ -65,19 +66,25 @@ export function renderAllocTable(root: HTMLElement, dists: Flow[], result: Water
   ${navRow ? '<p class="hint">The last row is not a real payment. It shows how the remaining NAV would be split if sold on its date. The GP part is the "accrued carry".</p>' : ''}`;
 }
 
-export function renderLpTable(root: HTMLElement, partners: PartnerResult[], state: UiState): void {
-  const commit = (id: string) => state.partners.find((p) => p.id === id)?.commitment ?? 0;
-  const accrued = (p: PartnerResult) => p.liquidation?.steps.reduce((s, x) => s + x.gp, 0) ?? 0;
+export function renderLpTable(root: HTMLElement, partners: PartnerResult[], state: UiState, input: FundInput): void {
+  const ui = (id: string) => state.partners.find((p) => p.id === id);
+  const typeLabel = (id: string) => PARTNER_TYPES.find(([t]) => t === ui(id)?.type)?.[1] ?? '';
+  const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
+  const accrued = (p: PartnerResult) => sum(p.liquidation?.steps.map((x) => x.gp) ?? []);
+  const navLp = (p: PartnerResult) => sum(p.liquidation?.steps.map((x) => x.lp) ?? []);
+  const fees = (p: PartnerResult) => sum(p.fees.map((f) => f.amount));
   root.innerHTML = `<div class="table-scroll"><table>
-    <thead><tr><th>LP</th><th>Commitment</th><th>Share</th><th>Paid in</th><th>Distributed to LP</th><th>Carry paid to GP</th><th>Accrued carry on NAV</th><th>Capital still owed</th><th>Pref still owed</th></tr></thead>
+    <thead><tr><th>Partner</th><th>Type</th><th>Commitment</th><th>Fees paid</th><th>Paid in</th><th>Distributed</th><th>Carry paid</th><th>Accrued carry</th><th>TVPI</th><th>Net IRR</th></tr></thead>
     <tbody>${partners
-      .map(
-        (p) => `<tr><td>${esc(p.partnerId)}</td><td>${money(commit(p.partnerId))}</td><td>${pct(p.share)}</td>
-        <td>${money(p.ledger.contributed, 2)}</td><td>${money(p.ledger.distributedLp, 2)}</td><td>${money(p.ledger.distributedGp, 2)}</td>
-        <td>${money(accrued(p), 2)}</td>
-        <td>${money(Math.max(0, p.ledger.capitalOutstanding), 2)}</td><td>${money(Math.max(0, p.ledger.prefAccrued), 2)}</td></tr>`,
-      )
+      .map((p) => {
+        const tvpi = p.ledger.contributed > 0 ? (p.ledger.distributedLp + navLp(p)) / p.ledger.contributed : null;
+        return `<tr><td>${esc(p.partnerId)}</td><td>${typeLabel(p.partnerId)}</td><td>${money(ui(p.partnerId)?.commitment ?? 0)}</td>
+        <td>${money(fees(p), 2)}</td><td>${money(p.ledger.contributed, 2)}</td><td>${money(p.ledger.distributedLp, 2)}</td>
+        <td>${money(p.ledger.distributedGp, 2)}</td><td>${money(accrued(p), 2)}</td>
+        <td>${multiple(tvpi)}</td><td>${pct(xirr(partnersCashFlows(input, [p])))}</td></tr>`;
+      })
       .join('')}</tbody>
   </table></div>
-  <p class="hint">Each LP runs its own waterfall on its share of every flow. With identical terms the results are exactly pro rata. From M3, different fee rates per LP make them diverge.</p>`;
+  <p class="hint">Each partner runs its own waterfall on its share of every flow, plus its own fee calls. Partners who pay lower fees
+    contribute less, so their profit (and the carry on it) is higher and their net IRR is better. With identical terms everyone is exactly pro rata.</p>`;
 }

@@ -2,8 +2,9 @@ import type { FundEvent, FundInput, Partner } from '../engine';
 
 /**
  * Preset scenarios. All synthetic: invented LPs, round-ish numbers, amounts in $ millions.
- * The terms of the first preset follow the ILPA Model LPA's whole-of-fund waterfall
- * (see sources.md). M4 adds the American preset. M8 adds presets calibrated to public data.
+ * The carry terms of the first two presets follow the ILPA Model LPA's whole-of-fund waterfall
+ * (see sources.md). The fee terms are typical market terms, not from any one document.
+ * M4 adds the American preset. M8 adds presets calibrated to public data.
  */
 export interface Preset {
   id: string;
@@ -29,6 +30,54 @@ const CALLS: FundEvent[] = [
 const dist = (id: string, date: string, amount: number): FundEvent => ({ id, kind: 'distribution', date, amount });
 
 export const PRESETS: Preset[] = [
+  {
+    id: 'full-fund',
+    name: 'Full fund: fees, side letters, GP commitment',
+    blurb:
+      'ILPA-style carry terms plus management fees: 2% on commitments for a 5-year investment period, then ' +
+      '1.5% on invested capital, billed quarterly. LP Alpha gets a 0.25% size discount (≥ $40m), LP Beta has ' +
+      'a side letter (0.5% off), and the GP invests 2% of the fund itself. Compare net IRRs across partners, ' +
+      'and see how much of the gross profit fees and carry take.',
+    input: {
+      terms: { structure: 'european', hurdleRate: 0.08, compounding: 'annual', catchUpRate: 0.8, carryRate: 0.2 },
+      partners: [
+        { id: 'LP Alpha (pension)', role: 'LP', commitment: 50, feeClassId: 'standard' },
+        { id: 'LP Beta (insurer)', role: 'LP', commitment: 30, feeClassId: 'side_letter' },
+        { id: 'LP Gamma (family office)', role: 'LP', commitment: 18, feeClassId: 'standard' },
+        { id: 'GP commitment', role: 'GP', commitment: 2 },
+      ],
+      events: [
+        { id: 'call-1', kind: 'capital_call', date: '2020-03-31', investment: 25, fee: 0 },
+        { id: 'call-2', kind: 'capital_call', date: '2020-12-31', investment: 25, fee: 0 },
+        { id: 'call-3', kind: 'capital_call', date: '2021-09-30', investment: 22, fee: 0 },
+        { id: 'call-4', kind: 'capital_call', date: '2022-06-30', investment: 13, fee: 0 },
+        { id: 'dist-1', kind: 'distribution', date: '2023-06-30', amount: 20, costRealized: 12 },
+        { id: 'dist-2', kind: 'distribution', date: '2024-12-31', amount: 45, costRealized: 25 },
+        { id: 'dist-3', kind: 'distribution', date: '2026-06-30', amount: 60, costRealized: 30 },
+        { id: 'dist-4', kind: 'distribution', date: '2027-12-31', amount: 50, costRealized: 13 },
+      ],
+      nav: { date: '2027-12-31', amount: 10 },
+      fees: {
+        start: '2020-01-01',
+        classes: {
+          standard: {
+            periods: [
+              { from: '2020-01-01', to: '2025-01-01', rate: 0.02, basis: 'commitment' },
+              { from: '2025-01-01', to: '2030-01-01', rate: 0.015, basis: 'invested_capital' },
+            ],
+            sizeDiscount: { mode: 'whole', bands: [{ minCommitment: 40, rateReduction: 0.0025 }] },
+          },
+          side_letter: {
+            periods: [
+              { from: '2020-01-01', to: '2025-01-01', rate: 0.015, basis: 'commitment' },
+              { from: '2025-01-01', to: '2030-01-01', rate: 0.01, basis: 'invested_capital' },
+            ],
+            sizeDiscount: { mode: 'whole', bands: [{ minCommitment: 40, rateReduction: 0.0025 }] },
+          },
+        },
+      },
+    },
+  },
   {
     id: 'clean-european',
     name: 'Clean European fund (ILPA-style terms)',

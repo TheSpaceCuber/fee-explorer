@@ -238,3 +238,89 @@ Run the NAV of 80 through the waterfall on 2026-01-01, from C = 50, P = 10, Π =
 - **Accrued carry = 6**, net NAV = 74
 
 **DPI 0.5, TVPI (50 + 74)/100 = 1.24, IRR 24%.**
+
+---
+
+# Milestone 3: management fees
+
+## Conventions
+
+- **Billing:** quarterly in advance, on `fees.start` + 0, 3, 6, … months. Each quarter is charged
+  `rate / 4 × basis`. No pro-ration.
+- **Period:** a quarter is charged at the period whose `[from, to)` contains its billing date.
+  No period covers it → no fee.
+- **Basis:** `commitment`, or `invested_capital` = investment called − cost of investments sold
+  (`costRealized` on distributions), counting events dated on or before the billing date.
+- **Funded by capital calls:** each fee becomes a capital call `{investment: 0, fee}` for that
+  partner. On the same date, fee calls come before that day's other events.
+- **Size discount:** `whole`: the full commitment gets the largest reduction whose threshold it
+  meets. `marginal`: each slice of commitment above a threshold gets that band's reduction.
+- **GP commitment:** role `GP`. It shares investment calls and distributions pro rata, pays no fees
+  and no carry. Fund metrics (DPI, TVPI, net IRR) cover LP investors only.
+
+F1–F5 use a **0% hurdle** so the fee mechanics are easy to see (everything above capital is split).
+Carry 20%, no catch-up. Commitment 100 unless stated. Investment of 80 called on 2025-01-01.
+
+## F1 — 2% on commitment for one year
+Fees: 2025-01-01, 04-01, 07-01, 10-01 → 4 × (2%/4 × 100) = 4 × 0.5 = **2**. Paid-in = 82.
+Distribution 120 on 2026-01-01: ROC 82, SPLIT 38 → GP 7.6, LP 30.4.
+**LP 112.4, GP 7.6.**
+Bridge: gross profit 120 − 80 = 40 → − fees 2 → − carry 7.6 → net 30.4 = 112.4 − 82. ✓
+
+## F2 — step-down to invested capital
+2% on commitment in 2025, then 1.5% on invested capital in 2026 (period ends 2027-01-01).
+Distribution 50 on 2026-06-30 (cost sold 40) and 70 on 2027-01-01 (cost sold 40).
+
+| Billing date | Period | Basis | Fee |
+|---|---|---|---|
+| 2025-01-01 … 2025-10-01 | 2% · commitment | 100 | 0.5 each → 2 |
+| 2026-01-01 | 1.5% · invested | 80 | 0.3 |
+| 2026-04-01 | 1.5% · invested | 80 | 0.3 |
+| 2026-07-01 | 1.5% · invested | 80 − 40 = 40 | 0.15 |
+| 2026-10-01 | 1.5% · invested | 40 | 0.15 |
+
+Total fees **2.9**. Paid-in 82.9.
+- d1 (50): capital outstanding 80 + 2 + 0.6 = 82.6 → ROC 50 → C = 32.6
+- fees 0.15 + 0.15 → C = 32.9
+- d2 (70): ROC 32.9, SPLIT 37.1 → GP 7.42, LP 29.68
+
+**LP 112.58, GP 7.42.** Bridge: 40 − 2.9 − 7.42 = 29.68 = 112.58 − 82.9. ✓
+
+## F3 — two LPs, size discount (whole commitment)
+LP-A 60, LP-B 40. 2% on commitment in 2025. Band: commitment ≥ 50 → rate − 0.5%.
+- LP-A: 1.5% → 0.225/quarter → fees 0.9. Investment 48. Paid-in 48.9.
+  Its share of 120 = 72: ROC 48.9, SPLIT 23.1 → GP 4.62, LP 18.48 → **LP-A 67.38**
+- LP-B: 2% → 0.2/quarter → fees 0.8. Investment 32. Paid-in 32.8.
+  Its share = 48: ROC 32.8, SPLIT 15.2 → GP 3.04, LP 12.16 → **LP-B 44.96**
+
+**Fund: LP 112.34, GP 7.66, fees 1.7.** The LPs are no longer pro rata. LP-A pays less fee, so
+more of its money is "profit" and it pays more carry (4.62/60 > 3.04/40) but still ends better off.
+
+## F4 — same, marginal bands
+LP-A: first 50 at 2%, the last 10 at 1.5% → annual fee 1.00 + 0.15 = 1.15 → 0.2875/quarter
+(blended rate 1.9167%). Paid-in 49.15. ROC 49.15, SPLIT 22.85 → GP 4.57, LP 18.28 → **LP-A 67.43**.
+LP-B as F3. **Fund: LP 112.39, GP 7.61, fees 1.95.**
+
+## F5 — GP commitment
+LP 99 (2% on commitment), GP 1 (role GP: no fees, no carry). Investment 80 → LP 79.2, GP 0.8.
+- LP: fees 4 × 0.495 = 1.98. Paid-in 81.18. Share of 120 = 118.8: ROC 81.18, SPLIT 37.62
+  → carry 7.524, LP keeps 30.096 → **LP 111.276**
+- GP commitment: put in 0.8, gets 1.2 back, all of it (no carry on its own money).
+
+Fund allocations: ROC 81.98 (81.18 + 0.8), SPLIT LP 30.496 (30.096 + 0.4), carry 7.524.
+Metrics are for LP investors only: paid-in 81.18, DPI 111.276 / 81.18.
+
+## F6 — fees earn pref too (F1 with a 10% hurdle)
+Contributions 80.5 on 2025-01-01, then 0.5 on 04-01, 07-01 and 10-01 (275, 184 and 92 days
+before 2026-01-01). With annual compounding and no withdrawals in between:
+H = 80.5 × 1.1 + 0.5 × (1.1^(275/365) + 1.1^(184/365) + 1.1^(92/365)) = 90.123992… → P = 8.123992…
+ROC 82, PREF 8.123992, SPLIT 29.876008 → GP 5.975202, LP 23.900806.
+**LP 114.024798…, GP 5.975202…** The fee dollars earn pref just like investment dollars.
+
+## F7 — fees stop at the NAV date (regression)
+F1's schedule, but no distribution: the fund is valued at NAV 85 on 2025-06-30.
+Only the 2025-01-01 and 2025-04-01 fees are billed. 2025-07-01 is after the valuation date, so
+it hasn't happened yet. Fees 1, paid-in 81.
+Hypothetical sale of 85: ROC 81, SPLIT 4 → accrued carry 0.8, net NAV 84.2. TVPI = 84.2 / 81.
+*Found by a property test:* before the fix, the 07-01 and 10-01 fee calls moved the ledger's
+clock past the NAV date, and the liquidation accrued pref over a negative time span.

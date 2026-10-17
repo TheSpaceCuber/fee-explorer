@@ -141,9 +141,68 @@ accrued carry 4, net NAV 76, TVPI 1.26 (it would be 1.30 gross).
 
 The step-through lets you walk this pretend distribution like a real one ("NAV, if sold").
 
+## Management fees (M3)
+
+The **management fee** pays the GP to run the fund: salaries, offices, deal sourcing. It's
+charged whether or not the fund makes money. Carry, by contrast, is only earned on profit.
+
+### A typical schedule
+
+| Phase | Rate | Basis | Why |
+|---|---|---|---|
+| Investment period (often 5 years) | ~2% a year | **commitment** | The GP is busy finding deals, so the fee is on the whole fund size |
+| After that | ~1.5% a year | **net invested capital** | The GP is harvesting. The fee shrinks as deals are sold |
+
+**Net invested capital** = investment called − cost of investments sold (or written off). Cost,
+not proceeds: a deal bought for 12 and sold for 20 reduces the basis by 12. That's why each
+distribution in this tool has a "cost sold" field.
+
+The engine bills **quarterly in advance**: on each billing date (fee start + 0, 3, 6, … months)
+it charges `rate / 4 × basis`. Hand-worked case F2 walks through a step-down.
+
+### Fees are paid by calling capital, and that matters for carry
+
+The LPs pay the fee by funding a capital call. So fee dollars are **contributed capital**:
+- they come back to the LP first, in the ROC tier,
+- they earn the pref like any other contributed dollar (case F6: pref 8.12 vs about 8.05),
+- so the fund has to earn back its fees before the GP sees carry.
+
+Turning fees on in the full-fund preset lowers GP carry from $17.6m to $15.7m, and a property
+test checks that adding fees never increases carry.
+
+### Different LPs, different fees
+
+- **Size discount (fee ratchet):** big commitments pay less. Two common conventions:
+  - *whole*: if you commit ≥ $40m, your whole commitment gets the lower rate,
+  - *marginal*: only the slice above $40m does, like tax brackets (case F4).
+- **Side letter:** a negotiated deal for one LP, often a lower rate for early or strategic investors.
+- **Fee-free LP:** e.g. employees or affiliates investing alongside.
+- **GP commitment:** the GP invests its own money (often 1–2%) alongside the LPs. It pays no fees
+  and no carry (it would be paying itself). Its return is the deals' gross return, which makes a
+  neat check: in the full-fund preset its IRR equals the gross deal IRR.
+
+Because each partner pays different fees, each has a different hurdle account, different carry
+and a different net IRR. That's why the engine runs the waterfall **per partner** and adds up.
+
+### From gross to net
+
+```
+gross profit   = distributions + NAV − investment called       (what the deals made)
+− management fees
+− carry paid
+− accrued carry (on the NAV)
+= net profit to partners
+```
+
+This always adds up exactly: every distributed dollar goes to a partner or to carry, and fees are
+money paid in on top of the investment. The same story in IRR terms: **gross IRR → IRR after fees
+→ net IRR**. The gaps are the "fee drag" and "carry drag" LPs talk about. In the full-fund preset
+that's 16.9% → 14.8% → 12.9%.
+
 ## Performance metrics
 
-- **Paid-in:** total contributed capital (investment + fees).
+- **Paid-in:** total contributed capital (investment + fees). LP metrics cover LP investors only,
+  not the GP's own commitment.
 - **DPI (distributions to paid-in):** LP distributions ÷ paid-in. Cash actually returned. A DPI
   of 1.0x means the LPs have their money back.
 - **TVPI (total value to paid-in):** (LP distributions + net NAV) ÷ paid-in. Realized plus unrealized.
@@ -166,6 +225,9 @@ goes out of range. The result is checked against `pyxirr`, which matches Excel.
 | Carry rate in [0, 1) | A rate of 1 or more would give the GP everything. |
 | Catch-up is 0, or above the carry rate and at most 1 | Otherwise the GP never catches up and the tier never ends. |
 | Compounding is one of simple / annual / quarterly / daily | |
+| Fee periods are valid and don't overlap; rates between 0 and 10% | |
+| A partner's fee class must exist; the GP commitment can't have one | The GP doesn't charge itself fees. |
+| Total cost sold ≤ total investment called | Invested capital (the fee basis) can't go negative. |
 
 ## Numbers and rounding
 
@@ -182,3 +244,16 @@ generated hurdle and carry rate was about 0. Out of 745 random funds with a catc
 paid one. The fix was to generate rates in whole basis points and amounts in whole cents, plus a
 **coverage test** that fails if fewer than a set number of random funds pay pref, catch-up and
 carry, or end mid-catch-up. A property is only as good as the inputs it sees.
+
+## Testing lesson 2: a property test found a real bug
+
+When fees were added, the "no allocation is ever negative" property failed with an allocation of
+−0.0000000029. Tiny, but money shouldn't go negative. The shrunk counterexample showed a NAV valued
+on 31 Jan while the fee schedule kept billing until October. Those later fee calls moved the
+ledger's clock past the NAV date, so the hypothetical liquidation accrued pref over **−0.67 years**.
+Validation only compared the NAV date with the events you entered. It couldn't see the fee calls,
+because the engine generates them later.
+
+The fix: fees after the NAV date aren't billed (the NAV is a valuation as of that date), and the
+accrual now throws if time ever runs backwards, so this kind of bug fails loudly. Hand-worked
+case F7 pins it down. No hand-picked example would have found it. The random funds did.

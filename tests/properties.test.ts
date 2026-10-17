@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { runFund, type FundEvent, type FundInput } from '../src/engine';
+import { computeMetrics, runFund, type FundEvent, type FundInput } from '../src/engine';
 import { carryPaid, profitPaid } from '../src/engine/carry/tiers';
 import { fundArb } from './arbitraries';
 
@@ -24,11 +24,14 @@ const distributions = (input: FundInput) =>
  */
 describe('generator coverage', () => {
   it('produces funds that pay pref, catch-up, carry, and end mid-catch-up', () => {
-    const counts = { pref: 0, catchUp: 0, split: 0, endsInCatchUp: 0 };
+    const counts = { pref: 0, catchUp: 0, split: 0, endsInCatchUp: 0, fees: 0, investedBasisFees: 0 };
     // Fixed seed: a coverage check must not pass or fail depending on luck.
     // (The properties below still use a fresh random seed every run, to keep exploring.)
     for (const input of fc.sample(fundArb, { numRuns: 2000, seed: 20261017 })) {
-      const p = runFund(input).partners[0]!;
+      const result = runFund(input);
+      if (result.fees.length > 0) counts.fees++;
+      if (result.fees.some((f) => f.basis === 'invested_capital' && f.amount > EPS)) counts.investedBasisFees++;
+      const p = result.partners[0]!;
       const steps = p.trace.flatMap((ev) => ev.steps);
       if (steps.some((s) => s.tier === 'PREF' && s.lp > EPS)) counts.pref++;
       if (steps.some((s) => s.tier === 'CATCHUP' && s.gp > EPS)) counts.catchUp++;
@@ -41,7 +44,9 @@ describe('generator coverage', () => {
     expect(counts.catchUp).toBeGreaterThan(200);
     expect(counts.split).toBeGreaterThan(200);
     expect(counts.endsInCatchUp).toBeGreaterThan(10);
-  });
+    expect(counts.fees).toBeGreaterThan(400);
+    expect(counts.investedBasisFees).toBeGreaterThan(200);
+  }, 30_000); // 2,000 funds with fee schedules take a few seconds
 });
 
 describe('waterfall properties', () => {
@@ -119,7 +124,8 @@ describe('waterfall properties', () => {
       fc.property(fundArb, (input) => {
         if (input.terms.catchUpRate === 0) return;
         const c = input.terms.carryRate;
-        for (const p of runFund(input).partners) {
+        // Only carry-paying partners: the GP's own commitment pays 0% carry by design.
+        for (const p of runFund(input).partners.filter((x) => x.role === 'LP')) {
           for (const ev of p.trace) {
             const split = ev.steps.find((s) => s.tier === 'SPLIT');
             if (split && split.available > EPS) {
@@ -134,7 +140,10 @@ describe('waterfall properties', () => {
 
   it('with identical terms, each LP gets exactly its pro-rata share of the fund result', () => {
     fc.assert(
-      fc.property(fundArb, (input) => {
+      fc.property(fundArb, (generated) => {
+        // Identical terms: drop the fees and make every partner a plain LP.
+        const { fees: _, ...rest } = generated;
+        const input: FundInput = { ...rest, partners: generated.partners.map((p) => ({ id: p.id, role: 'LP', commitment: p.commitment })) };
         const fund = runFund({ ...input, partners: [{ id: 'ALL', role: 'LP', commitment: 1 }] });
         const fundLp = fund.partners[0]!.ledger.distributedLp;
         const fundGp = fund.partners[0]!.ledger.distributedGp;
@@ -154,6 +163,57 @@ describe('waterfall properties', () => {
         const low = carry(input);
         const high = carry({ ...input, terms: { ...input.terms, hurdleRate: input.terms.hurdleRate + bump } });
         expect(high).toBeLessThanOrEqual(low + EPS * Math.max(1, low));
+      }),
+    );
+  });
+
+  it('the gross-to-net bridge reconciles with what the partners actually got', () => {
+    fc.assert(
+      fc.property(fundArb, (input) => {
+        const result = runFund(input);
+        const { bridge } = computeMetrics(input, result);
+        // Net profit computed bottom-up from each partner's own ledger and liquidation:
+        const fromPartners = result.partners.reduce((s, p) => {
+          const navLp = p.liquidation?.steps.reduce((t, x) => t + x.lp, 0) ?? 0;
+          return s + p.ledger.distributedLp + navLp - p.ledger.contributed;
+        }, 0);
+        expect(Math.abs(bridge.netProfit - fromPartners)).toBeLessThanOrEqual(1e-7 * Math.max(1, Math.abs(fromPartners)));
+      }),
+    );
+  });
+
+  it('fees are never negative and only charged inside a fee period', () => {
+    fc.assert(
+      fc.property(fundArb, (input) => {
+        for (const f of runFund(input).fees) {
+          expect(f.amount).toBeGreaterThan(0);
+          const partner = input.partners.find((p) => p.id === f.partnerId)!;
+          const periods = input.fees!.classes[partner.feeClassId!]!.periods;
+          expect(periods.some((p) => p.from <= f.date && f.date < p.to)).toBe(true);
+        }
+      }),
+    );
+  });
+
+  it('charging management fees never gives the GP more carry', () => {
+    fc.assert(
+      fc.property(fundArb, (input) => {
+        if (!input.fees) return;
+        const { fees: _, ...noFees } = input;
+        const carry = (i: FundInput) => runFund(i).allocations.reduce((s, a) => s + a.gp, 0);
+        const withoutPartnerClasses: FundInput = { ...noFees, partners: input.partners.map(({ feeClassId: __, ...p }) => p) };
+        expect(carry(input)).toBeLessThanOrEqual(carry(withoutPartnerClasses) + EPS * Math.max(1, carry(withoutPartnerClasses)));
+      }),
+    );
+  });
+
+  it('the GP commitment never pays carry or fees', () => {
+    fc.assert(
+      fc.property(fundArb, (input) => {
+        const gp = runFund(input).partners.find((p) => p.role === 'GP');
+        if (!gp) return;
+        expect(gp.ledger.distributedGp).toBe(0);
+        expect(gp.fees).toHaveLength(0);
       }),
     );
   });

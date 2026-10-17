@@ -4,7 +4,8 @@
 export * from './types';
 export { runFund, LIQUIDATION_ID } from './partners';
 export { grow } from './carry/hurdle';
-export { computeMetrics, lpCashFlows, type FundMetrics } from './metrics';
-export { xirr, type DatedFlow } from './xirr';
+export { computeMetrics, computeBridge, lpCashFlows, partnersCashFlows, type FundMetrics, type Bridge } from './metrics';
+export { discountedRate, billingDates, investedCapital } from './fees/managementFee';
+export { xirr } from './xirr';
 export { validate, assertValid, ValidationError, type ValidationIssue } from './validate';
-export { yearFraction, daysBetween } from './daycount';
+export { yearFraction, daysBetween, addMonths } from './daycount';

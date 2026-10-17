@@ -49,7 +49,12 @@ export function validate(input: FundInput): ValidationIssue[] {
   partners.forEach((p, i) => {
     if (ids.has(p.id)) add(`partners[${i}].id`, `Duplicate partner id "${p.id}".`);
     ids.add(p.id);
-    if (p.role !== 'LP') add(`partners[${i}].role`, 'Only LP partners are supported until M3.');
+    if (p.role !== 'LP' && p.role !== 'GP') add(`partners[${i}].role`, 'Must be LP or GP.');
+    if (p.feeClassId !== undefined) {
+      if (p.role === 'GP') add(`partners[${i}].feeClassId`, "The GP's own commitment pays no management fee.");
+      else if (!input.fees) add(`partners[${i}].feeClassId`, 'Has a fee class but the fund has no fee terms.');
+      else if (!(p.feeClassId in input.fees.classes)) add(`partners[${i}].feeClassId`, `Unknown fee class "${p.feeClassId}".`);
+    }
     if (!(Number.isFinite(p.commitment) && p.commitment > 0)) add(`partners[${i}].commitment`, 'Must be > 0.');
   });
 
@@ -58,6 +63,9 @@ export function validate(input: FundInput): ValidationIssue[] {
   // distribution on one day), so the caller has to decide it explicitly.
   const eventIds = new Set<string>();
   let lastDay = -Infinity;
+  // Invested capital (investment called − cost sold) can't go negative: you can't sell more cost
+  // than you bought. It's the fee basis after the investment period.
+  let invested = 0;
   // A distribution before any capital has been called would meet an empty hurdle account and
   // fall straight into the split, so the GP would earn carry on money no LP put in.
   let seenCall = false;
@@ -74,11 +82,17 @@ export function validate(input: FundInput): ValidationIssue[] {
     lastDay = Math.max(lastDay, day);
     if (e.kind === 'capital_call') {
       seenCall = true;
+      invested += e.investment;
       if (!isNonNegative(e.investment)) add(`${at}.investment`, 'Must be ≥ 0.');
       if (!isNonNegative(e.fee)) add(`${at}.fee`, 'Must be ≥ 0.');
     } else {
       if (!isNonNegative(e.amount)) add(`${at}.amount`, 'Must be ≥ 0.');
       if (!seenCall) add(`${at}.date`, 'A distribution cannot come before the first capital call.');
+      if (e.costRealized !== undefined) {
+        if (!isNonNegative(e.costRealized)) add(`${at}.costRealized`, 'Must be ≥ 0.');
+        invested -= e.costRealized;
+        if (invested < -1e-9) add(`${at}.costRealized`, 'Total cost sold exceeds total investment called.');
+      }
     }
   });
 
@@ -87,6 +101,35 @@ export function validate(input: FundInput): ValidationIssue[] {
     if (!isValidDate(nav.date)) add('nav.date', `Invalid date "${nav.date}".`);
     else if (dayNumber(nav.date) < lastDay) add('nav.date', 'NAV date must be on or after the last event.');
     if (!isNonNegative(nav.amount)) add('nav.amount', 'Must be ≥ 0.');
+  }
+
+  // --- Management fees ---
+  if (input.fees) {
+    const { fees } = input;
+    if (!isValidDate(fees.start)) add('fees.start', `Invalid date "${fees.start}".`);
+    for (const [name, cls] of Object.entries(fees.classes)) {
+      const at = `fees.classes.${name}`;
+      // Report problems by the index the caller wrote, so the message points at the right period.
+      cls.periods.forEach((p, i) => {
+        if (!isValidDate(p.from) || !isValidDate(p.to)) return add(`${at}.periods[${i}]`, 'Invalid date.');
+        if (dayNumber(p.from) >= dayNumber(p.to)) add(`${at}.periods[${i}]`, '"from" must be before "to".');
+        if (!(Number.isFinite(p.rate) && p.rate >= 0 && p.rate <= 0.1)) add(`${at}.periods[${i}].rate`, 'Must be between 0 and 10%.');
+        if (p.basis !== 'commitment' && p.basis !== 'invested_capital') add(`${at}.periods[${i}].basis`, 'Must be commitment or invested_capital.');
+      });
+      // Overlaps: compare neighbours in date order.
+      const ordered = cls.periods
+        .map((p, i) => ({ p, i }))
+        .filter(({ p }) => isValidDate(p.from) && isValidDate(p.to))
+        .sort((a, b) => dayNumber(a.p.from) - dayNumber(b.p.from));
+      for (let k = 1; k < ordered.length; k++) {
+        if (dayNumber(ordered[k]!.p.from) < dayNumber(ordered[k - 1]!.p.to)) {
+          add(`${at}.periods[${ordered[k]!.i}]`, `Overlaps periods[${ordered[k - 1]!.i}].`);
+        }
+      }
+      for (const [j, b] of (cls.sizeDiscount?.bands ?? []).entries()) {
+        if (!isNonNegative(b.minCommitment) || !isNonNegative(b.rateReduction)) add(`${at}.sizeDiscount.bands[${j}]`, 'Must be ≥ 0.');
+      }
+    }
   }
 
   return issues;

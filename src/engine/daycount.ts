@@ -43,3 +43,19 @@ export function daysBetween(from: ISODate, to: ISODate): number {
 export function yearFraction(from: ISODate, to: ISODate): number {
   return daysBetween(from, to) / 365;
 }
+
+/**
+ * Add calendar months, clamping to the month end: 2025-01-31 + 1 month = 2025-02-28.
+ * Fee billing dates are always computed from the start date (start + 3k months), never by chaining
+ * (date + 3 months, + 3 more, ...). Chaining would drift: Jan 31 → Apr 30 → Jul 30.
+ */
+export function addMonths(date: ISODate, months: number): ISODate {
+  dayNumber(date); // validates
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const total = y * 12 + (m - 1) + months;
+  const ny = Math.floor(total / 12);
+  const nm = total % 12; // 0-based
+  const lastDay = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+  const nd = Math.min(d, lastDay);
+  return `${String(ny).padStart(4, '0')}-${String(nm + 1).padStart(2, '0')}-${String(nd).padStart(2, '0')}`;
+}

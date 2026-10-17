@@ -32,6 +32,9 @@ export function accrue(
 
   // First event: nothing to accrue yet, just start the clock.
   const years = ledger.asOf === null ? 0 : yearFraction(ledger.asOf, date);
+  // Time must never run backwards. Validation should prevent it, so failing loudly here turns a
+  // missed check into an obvious error instead of a quietly wrong (negative) pref.
+  if (years < 0) throw new Error(`Hurdle accrual went backwards: ${ledger.asOf} → ${date}`);
   const prefAfter = years === 0 ? prefBefore : grow(capital, prefBefore, terms.hurdleRate, years, terms.compounding);
 
   return {

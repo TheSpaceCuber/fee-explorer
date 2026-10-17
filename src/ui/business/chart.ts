@@ -159,7 +159,7 @@ function barPath(x: number, y: number, w: number, h: number, r: number): string 
 }
 
 /** Round axis ticks: steps of 1, 2 or 5 × 10^k, about `count` of them. */
-function niceTicks(max: number, count: number): number[] {
+export function niceTicks(max: number, count: number): number[] {
   const rough = max / count;
   const pow = Math.pow(10, Math.floor(Math.log10(rough)));
   const step = [1, 2, 5, 10].map((m) => m * pow).find((s) => s >= rough)!;

@@ -1,5 +1,5 @@
 {
-  "description": "Hand-worked waterfall cases. See hand-worked.md for the arithmetic. Language-neutral: any engine (TS, Python) should reproduce these. Allocations are fund-level sums; tiers not listed are expected to be 0. Tolerance 1e-9 unless stated. metrics.accruedCarry (default 0) is the GP share of a hypothetical liquidation of the NAV; TVPI and IRR use NAV net of it.",
+  "description": "Hand-worked waterfall cases. See hand-worked.md for the arithmetic. Language-neutral: any engine (TS, Python) should reproduce these. Allocations are fund-level sums; tiers not listed are expected to be 0. Tolerance 1e-9 unless stated. metrics.accruedCarry (default 0) is the GP share of a hypothetical liquidation of the NAV; TVPI and IRR use NAV net of it. M3 cases add `fees` (management fee terms), partner roles/fee classes, and expected fees, lpFlows (LP investors' dated cash flows, summed per date) and bridge (gross profit -> fees -> carry -> net, all partners).",
   "defaults": {
     "terms": {
       "structure": "european",
@@ -1278,6 +1278,1045 @@
           "tvpi": 1.24,
           "irr": 0.24,
           "accruedCarry": 6
+        }
+      }
+    },
+    {
+      "id": "F1",
+      "title": "Fees: 2% on commitment for one year",
+      "terms": {
+        "hurdleRate": 0
+      },
+      "partners": [
+        {
+          "id": "LP-A",
+          "role": "LP",
+          "commitment": 100,
+          "feeClassId": "standard"
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "id": "c1",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 80,
+          "fee": 0
+        },
+        {
+          "id": "d1",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 120
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "d1",
+            "tier": "ROC",
+            "lp": 82,
+            "gp": 0
+          },
+          {
+            "eventId": "d1",
+            "tier": "SPLIT",
+            "lp": 30.4,
+            "gp": 7.6
+          }
+        ],
+        "totals": {
+          "lp": 112.4,
+          "gp": 7.6
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "fees": {
+          "total": 2,
+          "lines": [
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            }
+          ]
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -80.5
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-07-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-10-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 112.4
+          }
+        ],
+        "bridge": {
+          "grossProfit": 40,
+          "fees": 2,
+          "carryPaid": 7.6,
+          "accruedCarry": 0,
+          "netProfit": 30.4
+        },
+        "metrics": {
+          "paidIn": 82,
+          "dpi": 1.3707317073170733,
+          "tvpi": 1.3707317073170733,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "F2",
+      "title": "Fees: step-down to invested capital after the investment period",
+      "terms": {
+        "hurdleRate": 0
+      },
+      "partners": [
+        {
+          "id": "LP-A",
+          "role": "LP",
+          "commitment": 100,
+          "feeClassId": "standard"
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              },
+              {
+                "from": "2026-01-01",
+                "to": "2027-01-01",
+                "rate": 0.015,
+                "basis": "invested_capital"
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "id": "c1",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 80,
+          "fee": 0
+        },
+        {
+          "id": "d1",
+          "kind": "distribution",
+          "date": "2026-06-30",
+          "amount": 50,
+          "costRealized": 40
+        },
+        {
+          "id": "d2",
+          "kind": "distribution",
+          "date": "2027-01-01",
+          "amount": 70,
+          "costRealized": 40
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "d1",
+            "tier": "ROC",
+            "lp": 50,
+            "gp": 0
+          },
+          {
+            "eventId": "d2",
+            "tier": "ROC",
+            "lp": 32.9,
+            "gp": 0
+          },
+          {
+            "eventId": "d2",
+            "tier": "SPLIT",
+            "lp": 29.68,
+            "gp": 7.42
+          }
+        ],
+        "totals": {
+          "lp": 112.58,
+          "gp": 7.42
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "fees": {
+          "total": 2.9,
+          "lines": [
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2026-01-01",
+              "partnerId": "LP-A",
+              "amount": 0.3
+            },
+            {
+              "date": "2026-04-01",
+              "partnerId": "LP-A",
+              "amount": 0.3
+            },
+            {
+              "date": "2026-07-01",
+              "partnerId": "LP-A",
+              "amount": 0.15
+            },
+            {
+              "date": "2026-10-01",
+              "partnerId": "LP-A",
+              "amount": 0.15
+            }
+          ]
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -80.5
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-07-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-10-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2026-01-01",
+            "amount": -0.3
+          },
+          {
+            "date": "2026-04-01",
+            "amount": -0.3
+          },
+          {
+            "date": "2026-06-30",
+            "amount": 50
+          },
+          {
+            "date": "2026-07-01",
+            "amount": -0.15
+          },
+          {
+            "date": "2026-10-01",
+            "amount": -0.15
+          },
+          {
+            "date": "2027-01-01",
+            "amount": 62.58
+          }
+        ],
+        "bridge": {
+          "grossProfit": 40,
+          "fees": 2.9,
+          "carryPaid": 7.42,
+          "accruedCarry": 0,
+          "netProfit": 29.68
+        },
+        "metrics": {
+          "paidIn": 82.9,
+          "dpi": 1.3580217129071168,
+          "tvpi": 1.3580217129071168,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "F3",
+      "title": "Fees: size discount on the whole commitment; LPs diverge",
+      "terms": {
+        "hurdleRate": 0
+      },
+      "partners": [
+        {
+          "id": "LP-A",
+          "role": "LP",
+          "commitment": 60,
+          "feeClassId": "standard"
+        },
+        {
+          "id": "LP-B",
+          "role": "LP",
+          "commitment": 40,
+          "feeClassId": "standard"
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              }
+            ],
+            "sizeDiscount": {
+              "mode": "whole",
+              "bands": [
+                {
+                  "minCommitment": 50,
+                  "rateReduction": 0.005
+                }
+              ]
+            }
+          }
+        }
+      },
+      "events": [
+        {
+          "id": "c1",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 80,
+          "fee": 0
+        },
+        {
+          "id": "d1",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 120
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "d1",
+            "tier": "ROC",
+            "lp": 81.69999999999999,
+            "gp": 0
+          },
+          {
+            "eventId": "d1",
+            "tier": "SPLIT",
+            "lp": 30.640000000000008,
+            "gp": 7.66
+          }
+        ],
+        "totals": {
+          "lp": 112.34,
+          "gp": 7.66
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "byPartner": {
+          "LP-A": {
+            "lp": 67.38,
+            "gp": 4.62
+          },
+          "LP-B": {
+            "lp": 44.96,
+            "gp": 3.04
+          }
+        },
+        "fees": {
+          "total": 1.7,
+          "lines": [
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-A",
+              "amount": 0.225
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-A",
+              "amount": 0.225
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP-A",
+              "amount": 0.225
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP-A",
+              "amount": 0.225
+            },
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            }
+          ]
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -80.425
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.42500000000000004
+          },
+          {
+            "date": "2025-07-01",
+            "amount": -0.42500000000000004
+          },
+          {
+            "date": "2025-10-01",
+            "amount": -0.42500000000000004
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 112.34
+          }
+        ],
+        "bridge": {
+          "grossProfit": 40,
+          "fees": 1.7,
+          "carryPaid": 7.66,
+          "accruedCarry": 0,
+          "netProfit": 30.639999999999997
+        },
+        "metrics": {
+          "paidIn": 81.69999999999999,
+          "dpi": 1.3750305997552021,
+          "tvpi": 1.3750305997552021,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "F4",
+      "title": "Fees: size discount on the marginal slice",
+      "terms": {
+        "hurdleRate": 0
+      },
+      "partners": [
+        {
+          "id": "LP-A",
+          "role": "LP",
+          "commitment": 60,
+          "feeClassId": "standard"
+        },
+        {
+          "id": "LP-B",
+          "role": "LP",
+          "commitment": 40,
+          "feeClassId": "standard"
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              }
+            ],
+            "sizeDiscount": {
+              "mode": "marginal",
+              "bands": [
+                {
+                  "minCommitment": 50,
+                  "rateReduction": 0.005
+                }
+              ]
+            }
+          }
+        }
+      },
+      "events": [
+        {
+          "id": "c1",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 80,
+          "fee": 0
+        },
+        {
+          "id": "d1",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 120
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "d1",
+            "tier": "ROC",
+            "lp": 81.94999999999999,
+            "gp": 0
+          },
+          {
+            "eventId": "d1",
+            "tier": "SPLIT",
+            "lp": 30.440000000000005,
+            "gp": 7.61
+          }
+        ],
+        "totals": {
+          "lp": 112.39,
+          "gp": 7.61
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "byPartner": {
+          "LP-A": {
+            "lp": 67.43,
+            "gp": 4.57
+          },
+          "LP-B": {
+            "lp": 44.96,
+            "gp": 3.04
+          }
+        },
+        "fees": {
+          "total": 1.95,
+          "lines": [
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-A",
+              "amount": 0.2875
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-A",
+              "amount": 0.2875
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP-A",
+              "amount": 0.2875
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP-A",
+              "amount": 0.2875
+            },
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP-B",
+              "amount": 0.2
+            }
+          ]
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -80.4875
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.4875
+          },
+          {
+            "date": "2025-07-01",
+            "amount": -0.4875
+          },
+          {
+            "date": "2025-10-01",
+            "amount": -0.4875
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 112.39
+          }
+        ],
+        "bridge": {
+          "grossProfit": 40,
+          "fees": 1.95,
+          "carryPaid": 7.61,
+          "accruedCarry": 0,
+          "netProfit": 30.439999999999998
+        },
+        "metrics": {
+          "paidIn": 81.94999999999999,
+          "dpi": 1.371446003660769,
+          "tvpi": 1.371446003660769,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "F5",
+      "title": "GP commitment: no fees, no carry, excluded from LP metrics",
+      "terms": {
+        "hurdleRate": 0
+      },
+      "partners": [
+        {
+          "id": "LP",
+          "role": "LP",
+          "commitment": 99,
+          "feeClassId": "standard"
+        },
+        {
+          "id": "GP-commit",
+          "role": "GP",
+          "commitment": 1
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "id": "c1",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 80,
+          "fee": 0
+        },
+        {
+          "id": "d1",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 120
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "d1",
+            "tier": "ROC",
+            "lp": 81.98,
+            "gp": 0
+          },
+          {
+            "eventId": "d1",
+            "tier": "SPLIT",
+            "lp": 30.496,
+            "gp": 7.524
+          }
+        ],
+        "totals": {
+          "lp": 112.476,
+          "gp": 7.524
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "byPartner": {
+          "LP": {
+            "lp": 111.276,
+            "gp": 7.524
+          },
+          "GP-commit": {
+            "lp": 1.2,
+            "gp": 0
+          }
+        },
+        "fees": {
+          "total": 1.98,
+          "lines": [
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP",
+              "amount": 0.495
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP",
+              "amount": 0.495
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP",
+              "amount": 0.495
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP",
+              "amount": 0.495
+            }
+          ]
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -79.695
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.495
+          },
+          {
+            "date": "2025-07-01",
+            "amount": -0.495
+          },
+          {
+            "date": "2025-10-01",
+            "amount": -0.495
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 111.276
+          }
+        ],
+        "bridge": {
+          "grossProfit": 40,
+          "fees": 1.98,
+          "carryPaid": 7.524,
+          "accruedCarry": 0,
+          "netProfit": 30.496
+        },
+        "metrics": {
+          "paidIn": 81.18,
+          "dpi": 1.370731707317073,
+          "tvpi": 1.370731707317073,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "F6",
+      "title": "Fees earn pref too (F1 with a 10% hurdle)",
+      "partners": [
+        {
+          "id": "LP-A",
+          "role": "LP",
+          "commitment": 100,
+          "feeClassId": "standard"
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "id": "c1",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 80,
+          "fee": 0
+        },
+        {
+          "id": "d1",
+          "kind": "distribution",
+          "date": "2026-01-01",
+          "amount": 120
+        }
+      ],
+      "expected": {
+        "allocations": [
+          {
+            "eventId": "d1",
+            "tier": "ROC",
+            "lp": 82,
+            "gp": 0
+          },
+          {
+            "eventId": "d1",
+            "tier": "PREF",
+            "lp": 8.123992076551787,
+            "gp": 0
+          },
+          {
+            "eventId": "d1",
+            "tier": "SPLIT",
+            "lp": 23.90080633875857,
+            "gp": 5.975201584689643
+          }
+        ],
+        "totals": {
+          "lp": 114.02479841531036,
+          "gp": 5.975201584689643
+        },
+        "endState": {
+          "capitalOutstanding": 0,
+          "prefAccrued": 0
+        },
+        "fees": {
+          "total": 2,
+          "lines": [
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-07-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-10-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            }
+          ]
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -80.5
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-07-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-10-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2026-01-01",
+            "amount": 114.02479841531036
+          }
+        ],
+        "bridge": {
+          "grossProfit": 40,
+          "fees": 2,
+          "carryPaid": 5.975201584689643,
+          "accruedCarry": 0,
+          "netProfit": 32.02479841531036
+        },
+        "metrics": {
+          "paidIn": 82,
+          "dpi": 1.3905463221379313,
+          "tvpi": 1.3905463221379313,
+          "irr": null
+        }
+      }
+    },
+    {
+      "id": "F7",
+      "title": "Fees stop at the NAV date (regression found by a property test)",
+      "terms": {
+        "hurdleRate": 0
+      },
+      "partners": [
+        {
+          "id": "LP-A",
+          "role": "LP",
+          "commitment": 100,
+          "feeClassId": "standard"
+        }
+      ],
+      "fees": {
+        "start": "2025-01-01",
+        "classes": {
+          "standard": {
+            "periods": [
+              {
+                "from": "2025-01-01",
+                "to": "2026-01-01",
+                "rate": 0.02,
+                "basis": "commitment"
+              }
+            ]
+          }
+        }
+      },
+      "events": [
+        {
+          "id": "c1",
+          "kind": "capital_call",
+          "date": "2025-01-01",
+          "investment": 80,
+          "fee": 0
+        }
+      ],
+      "nav": {
+        "date": "2025-06-30",
+        "amount": 85
+      },
+      "expected": {
+        "allocations": [],
+        "totals": {
+          "lp": 0,
+          "gp": 0
+        },
+        "endState": {
+          "capitalOutstanding": 81,
+          "prefAccrued": 0
+        },
+        "fees": {
+          "total": 1,
+          "lines": [
+            {
+              "date": "2025-01-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            },
+            {
+              "date": "2025-04-01",
+              "partnerId": "LP-A",
+              "amount": 0.5
+            }
+          ]
+        },
+        "lpFlows": [
+          {
+            "date": "2025-01-01",
+            "amount": -80.5
+          },
+          {
+            "date": "2025-04-01",
+            "amount": -0.5
+          },
+          {
+            "date": "2025-06-30",
+            "amount": 84.2
+          }
+        ],
+        "bridge": {
+          "grossProfit": 5,
+          "fees": 1,
+          "carryPaid": 0,
+          "accruedCarry": 0.8,
+          "netProfit": 3.2
+        },
+        "metrics": {
+          "paidIn": 81,
+          "dpi": 0,
+          "tvpi": 1.0395061728395063,
+          "irr": null,
+          "accruedCarry": 0.8
         }
       }
     }

@@ -1,11 +1,7 @@
 import { dayNumber } from './daycount';
-import type { ISODate } from './types';
+import type { DatedFlow } from './types';
 
-export interface DatedFlow {
-  date: ISODate;
-  /** Negative = money paid in (contributions). Positive = money received (distributions, NAV). */
-  amount: number;
-}
+export type { DatedFlow };
 
 /**
  * XIRR: the annual rate r at which the present value of all dated cash flows is zero.

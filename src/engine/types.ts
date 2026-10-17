@@ -41,11 +41,81 @@ export interface CarryTerms {
   carryRate: number;
 }
 
+/**
+ * A partner in the fund.
+ *  - role 'LP': an investor. Pays management fees (per its fee class) and carry.
+ *  - role 'GP': the manager's own commitment ("GP commit", typically 1–2%). It invests alongside the
+ *    LPs but pays no fees and no carry on its own money, and it's left out of LP metrics.
+ */
 export interface Partner {
   id: string;
-  role: 'LP';
+  role: 'LP' | 'GP';
   /** Commitment: the total the partner has promised to fund when called. */
   commitment: number;
+  /** Key into ManagementFeeTerms.classes. No fee class → no management fee. */
+  feeClassId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Management fees (M3)
+// ---------------------------------------------------------------------------
+
+/**
+ * What the fee rate is applied to.
+ *  - commitment: the partner's full commitment, typical during the investment period.
+ *  - invested_capital: investment called minus the cost of investments sold, typical after the
+ *    investment period. It shrinks as the fund exits deals, so fees step down.
+ */
+export type FeeBasis = 'commitment' | 'invested_capital';
+
+/** One stretch of the fee schedule: an annual rate on a basis, for billing dates in [from, to). */
+export interface FeePeriod {
+  from: ISODate;
+  to: ISODate;
+  rate: number;
+  basis: FeeBasis;
+}
+
+/**
+ * Discount for large commitments (a "size ratchet").
+ *  - whole: the whole commitment gets the biggest reduction whose threshold it meets.
+ *  - marginal: like tax brackets, each slice of commitment above a threshold gets that band's reduction.
+ */
+export interface SizeDiscount {
+  mode: 'whole' | 'marginal';
+  bands: { minCommitment: number; rateReduction: number }[];
+}
+
+/** A fee class: the terms shared by a group of LPs (e.g. "standard", or a side letter). */
+export interface FeeClass {
+  periods: FeePeriod[];
+  sizeDiscount?: SizeDiscount;
+}
+
+/** Fees are billed quarterly in advance on start + 0, 3, 6, … months, as `rate / 4 × basis`. */
+export interface ManagementFeeTerms {
+  start: ISODate;
+  classes: Record<string, FeeClass>;
+}
+
+/** One quarterly fee charge for one partner. */
+export interface FeeLine {
+  partnerId: string;
+  /** Id of the capital call that funds it. */
+  eventId: string;
+  date: ISODate;
+  periodIndex: number;
+  basis: FeeBasis;
+  basisAmount: number;
+  /** Annual rate after any size discount. */
+  rate: number;
+  amount: number;
+}
+
+/** A dated cash flow from the partner's point of view: negative = paid in, positive = received. */
+export interface DatedFlow {
+  date: ISODate;
+  amount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +141,11 @@ export interface Distribution {
   kind: 'distribution';
   date: ISODate;
   amount: number;
+  /**
+   * Cost of the investments sold to produce this cash. It doesn't affect the waterfall, but it
+   * reduces invested capital, which is the fee basis after the investment period.
+   */
+  costRealized?: number;
 }
 
 export type FundEvent = CapitalCall | Distribution;
@@ -85,9 +160,13 @@ export interface NavMark {
 export interface FundInput {
   terms: CarryTerms;
   partners: Partner[];
-  /** Fund-level events in date order. Each partner gets its commitment share. */
+  /**
+   * Fund-level events in date order. Each partner gets its commitment share. Capital calls here
+   * are for investments. Fee calls are generated per partner from `fees`.
+   */
   events: FundEvent[];
   nav?: NavMark;
+  fees?: ManagementFeeTerms;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +212,7 @@ export interface TierAllocation {
   eventId: string;
   partnerId: string;
   tier: Tier;
-  /** Paid to the LP. */
+  /** Paid to the partner itself (an LP, or the GP on its own commitment). */
   lp: number;
   /** Paid to the GP as carry. */
   gp: number;
@@ -180,6 +259,7 @@ export interface EventTrace {
 
 export interface PartnerResult {
   partnerId: string;
+  role: Partner['role'];
   /** Share of each fund-level flow (commitment / total commitments). */
   share: number;
   allocations: TierAllocation[];
@@ -190,6 +270,10 @@ export interface PartnerResult {
    * Not a real event, so it isn't in `allocations` and doesn't change `ledger`.
    */
   liquidation: EventTrace | null;
+  /** Management fees charged to this partner. */
+  fees: FeeLine[];
+  /** This partner's cash flows: calls (investment + fee) negative, distributions received positive. */
+  flows: DatedFlow[];
 }
 
 export type FundAllocation = Omit<TierAllocation, 'partnerId'>;
@@ -200,4 +284,6 @@ export interface WaterfallResult {
   allocations: FundAllocation[];
   /** Fund-level hypothetical liquidation of the NAV (null when there's no NAV). */
   liquidation: { lp: number; gp: number; allocations: FundAllocation[] } | null;
+  /** Every fee line for every partner, in date order. */
+  fees: FeeLine[];
 }

@@ -3,6 +3,8 @@ import { computeMetrics, runFund, validate, type EventTrace, type FundInput, typ
 import { PRESETS } from '../scenarios/presets';
 import { piecesFor, renderChart, TIER_STYLE, type Piece } from './business/chart';
 import { renderInputs } from './business/inputs';
+import { renderBridge } from './business/bridge';
+import { renderFeeChart, renderFeeTable } from './business/fees';
 import { renderAllocTable, renderLegend, renderLpTable, renderTiles } from './business/panels';
 import { LAST_STEP, renderStepThrough } from './business/stepthrough';
 import { money, shortDate } from './format';
@@ -72,7 +74,11 @@ function update() {
     },
     onTogglePlay: togglePlay,
   });
-  renderLpTable(el('lp-table'), result.partners, state);
+  renderLpTable(el('lp-table'), result.partners, state, input);
+  renderBridge(el('bridge'), metrics);
+  renderFeeChart(el('fee-chart'), result.fees, showTooltipHtml, hideTooltip);
+  renderFeeTable(el('fee-table'), result.fees);
+  el('fees-panel').hidden = result.fees.length === 0;
 }
 
 function selectDistribution(id: string) {
@@ -115,6 +121,9 @@ function showTooltip(e: MouseEvent, id: string, hovered: Piece | null, result: W
     })
     .join('');
   tooltip.innerHTML = `<div class="tt-title">${shortDate(d.date)} distribution · ${money(d.amount, 2)}</div>${rows || '<div class="tt-row">Nothing distributed</div>'}<div class="tt-hint">Click to step through it</div>`;
+  placeTooltip(e);
+}
+function placeTooltip(e: MouseEvent) {
   tooltip.hidden = false;
   // Keep the tooltip on screen: flip to the left of the cursor near the right edge.
   const pad = 14;
@@ -123,6 +132,10 @@ function showTooltip(e: MouseEvent, id: string, hovered: Piece | null, result: W
   const top = Math.min(e.clientY + pad, window.innerHeight - height - 8);
   tooltip.style.left = `${Math.max(8, left)}px`;
   tooltip.style.top = `${top}px`;
+}
+function showTooltipHtml(e: MouseEvent, html: string) {
+  tooltip.innerHTML = html;
+  placeTooltip(e);
 }
 function hideTooltip() {
   tooltip.hidden = true;

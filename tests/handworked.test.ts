@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeMetrics, runFund, ValidationError, type FundInput, type Tier } from '../src/engine';
+import { computeMetrics, lpCashFlows, runFund, ValidationError, type DatedFlow, type FundInput, type Tier } from '../src/engine';
 import fixture from './fixtures/hand-worked.json';
 import oracle from './fixtures/xirr-oracle.json';
 
@@ -21,6 +21,7 @@ function toInput(c: Case): FundInput {
     partners: partners as FundInput['partners'],
     events: c.events as FundInput['events'],
     ...(c.nav ? { nav: c.nav as FundInput['nav'] & object } : {}),
+    ...(c.fees ? { fees: c.fees as FundInput['fees'] & object } : {}),
   };
 }
 
@@ -76,7 +77,30 @@ describe('hand-worked cases', () => {
         }
       }
 
+      if (expected.fees) {
+        expect(result.fees.reduce((s, f) => s + f.amount, 0)).toBeCloseTo(expected.fees.total, 9);
+        expect(result.fees.map((f) => [f.date, f.partnerId])).toEqual(
+          [...expected.fees.lines].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).map((f) => [f.date, f.partnerId]),
+        );
+        for (const want of expected.fees.lines) {
+          const got = result.fees.find((f) => f.date === want.date && f.partnerId === want.partnerId)!;
+          expect(got.amount, `fee ${want.partnerId} ${want.date}`).toBeCloseTo(want.amount, 9);
+        }
+      }
+
+      if (expected.lpFlows) {
+        expect(byDate(lpCashFlows(input, result))).toEqual(
+          expect.arrayContaining(expected.lpFlows.map((f) => [f.date, expect.closeTo(f.amount, 9)])),
+        );
+        expect(byDate(lpCashFlows(input, result)).length).toBe(expected.lpFlows.length);
+      }
+
       const m = computeMetrics(input, result);
+      if (expected.bridge) {
+        for (const [k, v] of Object.entries(expected.bridge)) {
+          expect(m.bridge[k as keyof typeof m.bridge] as number, `bridge.${k}`).toBeCloseTo(v, 9);
+        }
+      }
       expect(m.paidIn).toBeCloseTo(expected.metrics.paidIn, 9);
       expect(m.dpi!).toBeCloseTo(expected.metrics.dpi, 9);
       expect(m.tvpi!).toBeCloseTo(expected.metrics.tvpi, 9);
@@ -89,10 +113,20 @@ describe('hand-worked cases', () => {
   }
 });
 
+/** Sum flows per date, so [call, fee call] on one day compare as one flow. */
+function byDate(flows: DatedFlow[]): [string, number][] {
+  const m = new Map<string, number>();
+  for (const f of flows) m.set(f.date, (m.get(f.date) ?? 0) + f.amount);
+  return [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+}
+
 interface Expected {
   allocations: { eventId: string; tier: Tier; lp: number; gp: number }[];
   totals: { lp: number; gp: number };
   endState: { capitalOutstanding: number; prefAccrued: number };
   byPartner?: Record<string, { lp: number; gp: number }>;
   metrics: { paidIn: number; dpi: number; tvpi: number; irr: number | null; accruedCarry?: number };
+  fees?: { total: number; lines: { date: string; partnerId: string; amount: number }[] };
+  lpFlows?: DatedFlow[];
+  bridge?: Record<string, number>;
 }
